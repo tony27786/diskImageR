@@ -94,12 +94,12 @@ function(projectName, projectDir=NA, photoDir=NA, imageJLoc=NA, diskDiam = 6){
 	else{
 		knownIJLoc <- FALSE				
 		if ("ImageJ.app" %in% dir("/Applications/")){
-			call <- paste("/Applications/ImageJ.app/Contents/MacOS/JavaApplicationStub -batch", script, IJarguments, sep=" ")
+			call <- paste("/Applications/ImageJ.app/Contents/MacOS/ImageJ -batch", script, IJarguments, sep=" ")
 			knownIJLoc <- TRUE	
 			}
 			
 		if (knownIJLoc == FALSE & "ImageJ.app" %in% dir("/Applications/ImageJ/")){			
-			call <- paste("/Applications/ImageJ/ImageJ.app/Contents/MacOS/JavaApplicationStub -batch", script, IJarguments, sep=" ")
+			call <- paste("/Applications/ImageJ/ImageJ.app/Contents/MacOS/ImageJ -batch", script, IJarguments, sep=" ")
 			knownIJLoc <- TRUE	
 			}
 		if (knownIJLoc == FALSE & "ImageJ.app" %in% imageJLoc){
