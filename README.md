@@ -1,17 +1,16 @@
+## Disclaimer
+
+This repository is a fork of https://github.com/acgerstein/diskImageR and contains fixes for multiple known issues. This fork is community-maintained and is **not** an official upstream release. Please cite the original repository if you use this work.
+
 This package provides a pipeline to analyze photographs of disk diffusion plates. This removes the need to analyze the plates themselves, and thus analysis can be done separate from the assay. For typical disk assays, <i>diskImageR</i> measures drug resistance as the zone of inhibition, i.e.,the radius at multiple cutoff values where growth reaches 20\%, 50\%, or 80\% of maximal growth, and measures drug tolerance as the fraction of the subpopulation that is able to grow above the resistance point ("FoG"). For counfounding growth (where the observed population growth is highest at high drug concentration and decreases to no growth at low concentrations), <i>diskImageR</i> measures the zone of disinhibition as the point where growth is reduced by 20\%, 50\%, or 80\% below the maximal growth. For paradoxical growth, where high growth is observed at both high and low drug concentrations but decreases at intermediate concentration, <i> diskImageR</i> measures the radius of maximum inhibition, i.e., the point where the least amount of growth is observed. 
 
 ## Installing
 
-The package can be insalled directly from CRAN
-```r
-install.packages("diskImageR")
-```
-
-or, for the latest version, can be installed from GitHub using [devtools] (http://github.com/hadley/devtools)
+For the latest version, can be installed from GitHub using [devtools] (http://github.com/hadley/devtools)
 
 ```r
 #install.packages("devtools")
-devtools::install_github("acgerstein/diskImageR")
+devtools::install_github("tony27786/diskImageR")
 ```
 
 ## Vignette
