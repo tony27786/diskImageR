@@ -92,25 +92,36 @@ function(projectName, projectDir=NA, photoDir=NA, imageJLoc=NA, diskDiam = 6){
 		shell(paste(cmd, args), wait=TRUE,intern=TRUE)
 	}
 	else{
-		knownIJLoc <- FALSE				
-		if ("ImageJ.app" %in% dir("/Applications/")){
-			call <- paste("/Applications/ImageJ.app/Contents/MacOS/ImageJ -batch", script, IJarguments, sep=" ")
-			knownIJLoc <- TRUE	
-			}
-			
-		if (knownIJLoc == FALSE & "ImageJ.app" %in% dir("/Applications/ImageJ/")){			
-			call <- paste("/Applications/ImageJ/ImageJ.app/Contents/MacOS/ImageJ -batch", script, IJarguments, sep=" ")
-			knownIJLoc <- TRUE	
-			}
-		if (knownIJLoc == FALSE & "ImageJ.app" %in% imageJLoc){
-				call <- paste(imageJLoc,  "-batch", script, IJarguments, sep=" ")
-				knownIJLoc <- TRUE	
-				}
-		if(knownIJLoc == FALSE){
-			stop("ImageJ is not in expected location. Please move ImageJ to the Applications directory, or specify the path to its location using the argument 'imageJLoc'")
-				}
-		system(call)
-		}
+	  if (!is.na(imageJLoc)) {
+	    app_path <- imageJLoc
+	  } else {
+	    possible_locs <- c("/Applications/Fiji.app", 
+	                       "/Applications/ImageJ.app",
+	                       "/Applications/ImageJ/ImageJ.app")
+	    app_path <- possible_locs[file.exists(possible_locs)][1]
+	  }
+	  
+	  if (is.na(app_path) || !dir.exists(app_path)) {
+	    stop("Could not find ImageJ/Fiji application. Please check your installation or specify 'imageJLoc'.")
+	  }
+	  candidates <- c("ImageJ-macosx", "ImageJ-linux", "ImageJ", "JavaApplicationStub")
+	  binary_path <- NA
+	  for (exe in candidates) {
+	    full_path <- file.path(app_path, "Contents", "MacOS", exe)
+	    if (file.exists(full_path)) {
+	      binary_path <- full_path
+	      break
+	    }
+	  }
+	  
+	  if (!is.na(binary_path)) {
+	    call <- paste(shQuote(binary_path), "-batch", shQuote(script), IJarguments)
+	    message(paste("Executing ImageJ at:", binary_path))
+	    system(call)
+	  } else {
+	    stop(paste("Found the App folder at", app_path, "but could not find the executable binary inside Contents/MacOS/"))
+	  }
+	}
 
 	count_wait<-0.0;
 	while(length(dir(outputDir))<length(dir(photoDir)) && count_wait<1e12)
