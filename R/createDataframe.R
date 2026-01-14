@@ -146,7 +146,7 @@ createDataframe <- function(projectName, clearHalo, diskDiam = 6, maxDist = 25, 
   } 
   
   if (!typical) {
-    
+    print("Creating atypical dataframes")
     dotMax <- max(sapply(data, function(x) {x[which(x[,1] > standardLoc)[1], 2]}))
     stand <-c( sapply(data, function(x) {dotMax-x[which(x[,1] > standardLoc)[1], 2]}))
     
@@ -201,7 +201,7 @@ createDataframe <- function(projectName, clearHalo, diskDiam = 6, maxDist = 25, 
       
       cat(paste("\nSaving file: ", filenameNegLog,  sep=""))
       cat(paste("\n", projectName, "_confound_df.csv can be opened in MS Excel.\n",  sep=""))
-
+   }
     
     if (length(logIndices) != 0) {
       
@@ -265,7 +265,7 @@ createDataframe <- function(projectName, clearHalo, diskDiam = 6, maxDist = 25, 
     }
   }
 }
-}
+
 .findFoG <- function(i, data, ML, ML2, stand, clearHaloStand, dotedge = 3.4, maxDist = 35, standardLoc = 2.5, standType = standType){
   
   # this helper function is mostly taken from the CRAN legacy version
