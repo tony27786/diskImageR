@@ -1,8 +1,17 @@
 // Auto-crop round Petri dish from black background
 // Stable GUI mode version for Fiji
 
-inputDir = getDirectory("Choose input folder");
-outDir   = inputDir + "cropped/";
+args = split(getArgument(), "*");
+if (args.length < 2) {
+    exit("Invalid arguments. Expected format: inputDir*outputDir");
+}
+
+inputDir = args[0];
+outDir   = args[1];
+
+if (!endsWith(inputDir, File.separator)) inputDir = inputDir + File.separator;
+if (!endsWith(outDir, File.separator)) outDir = outDir + File.separator;
+
 File.makeDirectory(outDir);
 
 function stripExtensions(s) {
