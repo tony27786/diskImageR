@@ -7,7 +7,7 @@ Authors@R: c(
     person("Nazli", "Tahmasebi", email = "tahmasef@myumanitoba.ca", role = "aut"),
     person("Inbal", "Hecht", email = "inbal.hecht@gmail.com", role = "ctb"),
     person("Joseph", "Apoc", email = "tony27786@icloud.com", role = c("aut", "cre"))
-)
+    )
 Description: A customized version of the original diskImageR package for
     analyzing photographs of drug disk diffusion plates. This version includes
     local modifications to support updated image processing and batch analysis
