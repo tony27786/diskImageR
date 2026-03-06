@@ -317,13 +317,16 @@ function findDiskLarge(file){
   	run("Analyze Particles...", "size=4000-25000 circularity=0.20-1.00 show=Outlines display exclude add");
   }
 
-
-  if (nResults ==0){
-  	exit("Disk not identified, macro needs to be updated to account for photograph specifics.  Email Aleeza at gerst035@umn.edu for assistance");
+  if (nResults == 0){
+	print("FAILED: Disk not identified");
+	return(false);
   }
   if (nResults > 1){
-  	exit("More than one disk identified. Please ensure no other circles are present in the photograph (e.g., in labels) and rerun.");
+	print("FAILED: More than one disk identified");
+	return(false);
   }
+	return(true);
+
 }
 
 //Actual work flow starts here:
