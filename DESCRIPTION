@@ -1,4 +1,4 @@
-Package: diskImageR.apoc
+Package: diskImageR
 Title: Customized Pipeline to Analyze Resistance and Tolerance from Drug Disk Diffusion Assays
 Version: 1.1.0.9006
 Authors@R: c(
