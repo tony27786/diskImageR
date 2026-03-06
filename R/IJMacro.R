@@ -24,192 +24,252 @@
 #' @export
 
 IJMacro <-
-function(projectName, projectDir=NA, photoDir=NA, imageJLoc=NA, diskDiam = 6){
-	# if(!is.char(projectName))
-	diskImageREnv <- new.env()
-	fileDir <- projectName
-	if(is.na(projectDir)){
-		projectDir <- tcltk::tk_choose.dir(caption = "Select main project directory") 
-		if(is.na(projectDir)) stop("")	
-		}		
-	if(is.na(photoDir)){
-		photoDir <- tcltk::tk_choose.dir(caption = "Select location of photographs")
-		if(is.na(photoDir)) stop("")	
-		photoDirOrig <- photoDir
-		photoDir <- file.path(photoDir, "")
-		if (projectDir == photoDirOrig) {
-			cat("The photograph directory can not be used for the main project directory. Please select a different folder for the main project directory.")
-			projectDir <- tcltk::tk_choose.dir(caption = "Select main project directory") 
-		}
-
-	}
-	setwd(photoDir)
-	if (TRUE %in% file.info(dir())[,2]) {
-		stop("There is a folder located in your photograph directory. Please remove before continuing.")
-		}
-	dir.create(file.path(projectDir, "imageJ_out"), showWarnings=FALSE)
-	outputDir <- file.path(projectDir, "imageJ_out", fileDir, "")
-	IJarguments <- paste(photoDir, outputDir, diskDiam, sep="*")	
-
-	if(length(dir(outputDir)) > 0){
-		cont <- readline(paste("Output files exist in directory ", outputDir, "\nOverwrite? [y/n] ", sep=""))
-		if(cont=="n"){
-			stop("Please delete existing files or change project name before continuing.")
-			}
-		if(cont=="y"){
-			unlink(outputDir, recursive = TRUE)
-		}
-	}
-	
-	dir.create(file.path(outputDir), showWarnings= FALSE)
-	dir.create(file.path(projectDir, "figures"), showWarnings=FALSE)
-	dir.create(file.path(projectDir, "figures", fileDir), showWarnings=FALSE)
-	dir.create(file.path(projectDir, "parameter_files"), showWarnings=FALSE)
-	dir.create(file.path(projectDir, "parameter_files", fileDir), showWarnings=FALSE)	
-	
-	script <- file.path(.libPaths(), "diskImageR", "IJ_diskImageR.ijm")[1]			
-	if(.Platform$OS.type=="windows"){
-		IJarguments <- paste(paste(photoDir,  "", sep="\\"), paste(outputDir, "", sep="\\"), diskDiam, sep="*")		
-		script <- gsub("Program Files", "progra~1", script)
-		knownIJLoc <- FALSE
-		if("ImageJ.exe" %in% dir("C:\\progra~1\\ImageJ\\")){
-		  	cmd <- "C:\\progra~1\\ImageJ\\ImageJ.exe"
-		  	knownIJLoc <- TRUE
-		  	}
-		if("ImageJ.exe" %in% dir("C:\\Program Files (x86)\\ImageJ\\")){
-			cmd <- '"C:\\Program Files (x86)\\ImageJ\\ImageJ.exe"'
-			knownIJLoc <- TRUE
-			}
-		if("ImageJ.exe" %in% imageJLoc){
-			cmd <- paste(imageJLoc, "ImageJ.exe", sep="")
-			knownIJLoc <- TRUE
-			}
-		if(knownIJLoc == FALSE){
-			stop("ImageJ is not in expected location. Please move ImageJ to the Program Files directory, or specify the path to its location using the argument 'imageJLoc'")
-		}		
-		args <- paste("-batch", script, IJarguments)
-		args <- gsub("/", "\\\\", args)
-		shell(paste(cmd, args), wait=TRUE,intern=TRUE)
-	}
-	else{
-	  if (!is.na(imageJLoc)) {
-	    app_path <- imageJLoc
-	  } else {
-	    possible_locs <- c("/Applications/Fiji.app", 
-	                       "/Applications/ImageJ.app",
-	                       "/Applications/ImageJ/ImageJ.app")
-	    app_path <- possible_locs[file.exists(possible_locs)][1]
-	  }
-	  
-	  if (is.na(app_path) || !dir.exists(app_path)) {
-	    stop("Could not find ImageJ/Fiji application. Please check your installation or specify 'imageJLoc'.")
-	  }
-	  candidates <- c("ImageJ-macosx", "ImageJ-linux", "ImageJ", "JavaApplicationStub")
-	  binary_path <- NA
-	  for (exe in candidates) {
-	    full_path <- file.path(app_path, "Contents", "MacOS", exe)
-	    if (file.exists(full_path)) {
-	      binary_path <- full_path
-	      break
-	    }
-	  }
-	  
-	  if (!is.na(binary_path)) {
-	    call <- paste(shQuote(binary_path), "-batch", shQuote(script), IJarguments)
-	    message(paste("Executing ImageJ at:", binary_path))
-	    system(call)
-	  } else {
-	    stop(paste("Found the App folder at", app_path, "but could not find the executable binary inside Contents/MacOS/"))
-	  }
-	}
-
-	count_wait<-0.0;
-	while(length(dir(outputDir))<length(dir(photoDir)) && count_wait<1e12)
-	{
-	  count_wait<-count_wait+1.0
-	}
-	cat(paste("\nOutput of imageJ analyses saved in directory: \n", outputDir, "\n", sep=""))
-	cat(paste("\nElements in list '", projectName, "': \n", sep=""))	
-	temp <- .ReadIn_DirCreate(projectDir, outputDir, projectName)
-	if(!length(dir(photoDir)) == length(temp)){
-		stop("Mismatch between the number of files in the photograph directory and the number of images analyzed. This likely indicates a non-photograph file is located in this directory. Please remove and rerun before continuing.")
-		}		
-	cat("\a")
-#	assign(projectName, temp, envir=globalenv())
-#	assign(projectName, temp, envir=	diskImageREnv)	
-	assign(projectName, temp, inherits=TRUE)
-
-	dfNA <- .saveAveLine(temp)
-	cat(paste("\nThe average line from each phogograph has been saved: \n", file.path(getwd(), "parameter_files", projectName, paste("averageLines.csv", sep="")), "\n", sep=""))
-	write.csv(dfNA, file.path(getwd(), "parameter_files", projectName, paste("averageLines.csv", sep="")), row.names=FALSE)
-	# return(get(projectName, envir=diskImageREnv))	
-	}
+  function(projectName, projectDir=NA, photoDir=NA, imageJLoc=NA, diskDiam = 6, debug = FALSE){
+    # if(!is.char(projectName))
+    diskImageREnv <- new.env()
+    fileDir <- projectName
+    
+    # Select Directory
+    if(is.na(projectDir)){
+      projectDir <- tcltk::tk_choose.dir(caption = "Select main project directory") 
+      if(is.na(projectDir)) stop("")	
+    }		
+    if(is.na(photoDir)){
+      photoDir <- tcltk::tk_choose.dir(caption = "Select location of photographs")
+      if(is.na(photoDir)) stop("")	
+      photoDirOrig <- photoDir
+      photoDir <- file.path(photoDir, "")
+      if (projectDir == photoDirOrig) {
+        cat("The photograph directory can not be used for the main project directory. Please select a different folder for the main project directory.")
+        projectDir <- tcltk::tk_choose.dir(caption = "Select main project directory") 
+      }
+    }
+    
+    # Dealing with "~" mark
+    projectDir <- normalizePath(projectDir, winslash = "/", mustWork = FALSE)
+    photoDir   <- normalizePath(photoDir, winslash = "/", mustWork = FALSE)
+    # Dealing with path "/" mark
+    setwd(photoDir)
+    if (substr(photoDir, nchar(photoDir), nchar(photoDir)) != "/") {
+      photoDir <- paste0(photoDir, "/")
+    }
+    
+    if (TRUE %in% file.info(dir())[,2]) {
+      stop("There is a folder located in your photograph directory. Please remove before continuing.")
+    }
+    dir.create(file.path(projectDir, "imageJ_out"), showWarnings=FALSE)
+    outputDir <- file.path(projectDir, "imageJ_out", fileDir, "")
+    # Dealing with output path "/" mark
+    if (substr(outputDir, nchar(outputDir), nchar(outputDir)) != "/") {
+      outputDir <- paste0(outputDir, "/")
+    }
+    IJarguments <- paste(photoDir, outputDir, diskDiam, sep="*")
+    # ===== Debug Settings =====
+    if (debug) {
+      message("DEBUG: projectDir: ", projectDir)
+      message("DEBUG: photoDir: ", photoDir)
+      message("DEBUG: outputDir: ", outputDir)
+      message("DEBUG: IJarguments: ", IJarguments)
+    }
+    # ==========================
+    if(length(dir(outputDir)) > 0){
+      cont <- readline(paste("Output files exist in directory ", outputDir, "\nOverwrite? [y/n] ", sep=""))
+      if(cont=="n"){
+        stop("Please delete existing files or change project name before continuing.")
+      }
+      if(cont=="y"){
+        unlink(outputDir, recursive = TRUE)
+      }
+    }
+    
+    dir.create(file.path(outputDir), showWarnings= FALSE)
+    dir.create(file.path(projectDir, "figures"), showWarnings=FALSE)
+    dir.create(file.path(projectDir, "figures", fileDir), showWarnings=FALSE)
+    dir.create(file.path(projectDir, "parameter_files"), showWarnings=FALSE)
+    dir.create(file.path(projectDir, "parameter_files", fileDir), showWarnings=FALSE)	
+    
+    script <- file.path(.libPaths(), "diskImageR", "IJ_diskImageR.ijm")[1]
+    if(.Platform$OS.type=="windows"){
+      IJarguments <- paste(paste(photoDir,  "", sep="\\"), paste(outputDir, "", sep="\\"), diskDiam, sep="*")		
+      script <- gsub("Program Files", "progra~1", script)
+      knownIJLoc <- FALSE
+      if("ImageJ.exe" %in% dir("C:\\progra~1\\ImageJ\\")){
+        cmd <- "C:\\progra~1\\ImageJ\\ImageJ.exe"
+        knownIJLoc <- TRUE
+      }
+      if("ImageJ.exe" %in% dir("C:\\Program Files (x86)\\ImageJ\\")){
+        cmd <- '"C:\\Program Files (x86)\\ImageJ\\ImageJ.exe"'
+        knownIJLoc <- TRUE
+      }
+      if("ImageJ.exe" %in% imageJLoc){
+        cmd <- paste(imageJLoc, "ImageJ.exe", sep="")
+        knownIJLoc <- TRUE
+      }
+      if(knownIJLoc == FALSE){
+        stop("ImageJ is not in expected location. Please move ImageJ to the Program Files directory, or specify the path to its location using the argument 'imageJLoc'")
+      }		
+      args <- paste("-batch", script, IJarguments)
+      args <- gsub("/", "\\\\", args)
+      shell(paste(cmd, args), wait=TRUE,intern=TRUE)
+    }
+    else{
+      # Prefer Fiji if present
+      fiji_app <- "/Applications/Fiji/Fiji.app"
+      if (dir.exists(fiji_app)) {
+        app_path <- fiji_app
+      } else if (!is.na(imageJLoc) && dir.exists(imageJLoc)) {
+        # 2) Otherwise honor user-specified path (ImageJ.app or Fiji.app)
+        app_path <- normalizePath(imageJLoc, winslash = "/", mustWork = FALSE)
+      } else {
+        # 3) Fallback search
+        possible_locs <- c(
+          "/Applications/Fiji.app",
+          "/Applications/ImageJ.app",
+          "/Applications/ImageJ/ImageJ.app"
+        )
+        app_path <- possible_locs[dir.exists(possible_locs)][1]
+      }
+      
+      if (is.na(app_path) || !dir.exists(app_path)) {
+        stop("Could not find Fiji/ImageJ application. Please specify 'imageJLoc'.")
+      }
+      if (!grepl("\\.app$", app_path) && dir.exists(file.path(app_path, "Fiji.app"))) {
+        app_path <- file.path(app_path, "Fiji.app")
+      }
+      macos_dir <- file.path(app_path, "Contents", "MacOS")
+      
+      # Fiji launchers first; then ImageJ fallback
+      candidates <- c(
+        "fiji-macos-arm64",
+        "fiji-macos",
+        "fiji-macos-x64",
+        "jaunch-macos-arm64",
+        "jaunch-macos",
+        "jaunch-macos-x64",
+        "ImageJ-macosx",
+        "ImageJ",
+        "JavaApplicationStub",
+        "ImageJ-linux"
+      )
+      
+      binary_path <- NA
+      message("Searching for ImageJ/Fiji executable in: ", macos_dir)
+      
+      for (exe in candidates) {
+        full_path <- file.path(macos_dir, exe)
+        message("Checking candidate executable: ", exe)
+        if (file.exists(full_path)) {
+          binary_path <- full_path
+          message("Selected executable: ", exe)
+          break
+        }
+      }
+      
+      if (is.na(binary_path)) {
+        message("No candidate executable was found in the application bundle.")
+        stop(paste("Found app at", app_path, "but no runnable launcher in", macos_dir))
+      }
+      
+      message("Executing Fiji/ImageJ at: ", binary_path)
+      
+      res <- system2(
+        binary_path,
+        args = c("-macro", script, IJarguments),
+        stdout = TRUE,
+        stderr = TRUE
+      )
+      
+      if (debug) {
+        cat("===== Fiji/ImageJ stdout/stderr =====\n")
+        cat(paste(res, collapse = "\n"), "\n")
+        cat("=====================================\n")
+      }
+    }
+    
+    count_wait<-0.0;
+    while(length(dir(outputDir))<length(dir(photoDir)) && count_wait<1e12)
+    {
+      count_wait<-count_wait+1.0
+    }
+    cat(paste("\nOutput of imageJ analyses saved in directory: \n", outputDir, "\n", sep=""))
+    cat(paste("\nElements in list '", projectName, "': \n", sep=""))	
+    temp <- .ReadIn_DirCreate(projectDir, outputDir, projectName)
+    if(!length(dir(photoDir)) == length(temp)){
+      stop("Mismatch between the number of files in the photograph directory and the number of images analyzed. This likely indicates a non-photograph file is located in this directory. Please remove and rerun before continuing.")
+    }		
+    cat("\a")
+    #	assign(projectName, temp, envir=globalenv())
+    #	assign(projectName, temp, envir=	diskImageREnv)	
+    assign(projectName, temp, inherits=TRUE)
+    
+    dfNA <- .saveAveLine(temp)
+    cat(paste("\nThe average line from each phogograph has been saved: \n", file.path(getwd(), "parameter_files", projectName, paste("averageLines.csv", sep="")), "\n", sep=""))
+    write.csv(dfNA, file.path(getwd(), "parameter_files", projectName, paste("averageLines.csv", sep="")), row.names=FALSE)
+    # return(get(projectName, envir=diskImageREnv))	
+  }
 
 .saveAveLine <- function(L){
   addNA <- function(x, maxLen){
-  	if(nrow(x) < maxLen){
-  		diffLen <- maxLen - nrow(x)
-	     tdf <- data.frame(rep(NA, diffLen), rep(NA, diffLen))		
-	     names(tdf) <- names(x)
-  		x <- rbind(round(x, 3), tdf)
-  	 }
-  	else x <- round(x, 3)
+    if(nrow(x) < maxLen){
+      diffLen <- maxLen - nrow(x)
+      tdf <- data.frame(rep(NA, diffLen), rep(NA, diffLen))		
+      names(tdf) <- names(x)
+      x <- rbind(round(x, 3), tdf)
+    }
+    else x <- round(x, 3)
   } 
   maxLen <- max(sapply(L, nrow))
   newList <- lapply(L, addNA, maxLen)
-   df <- data.frame(matrix(unlist(newList), nrow=maxLen))
-   names(df) <- paste(c("distance", "instensity"), rep(names(L), each=2), sep=".")
-   df
+  df <- data.frame(matrix(unlist(newList), nrow=maxLen))
+  names(df) <- paste(c("distance", "instensity"), rep(names(L), each=2), sep=".")
+  df
 }
 
 
 
 .ReadIn_DirCreate <-
-function(workingDir, folderLoc, experAbbr){
+  function(workingDir, folderLoc, experAbbr){
     setwd(workingDir)
-	tList <- list()
-	tList <- .readIn(folderLoc, tList, 30)
-	len <- c()
-		for (i in 1:length(tList)){
-		len[i] <- length(tList[[i]][,1])
-		}
-	temp <- data.frame(names = names(tList), len)
-	redo <- subset(temp, len==1, names)	
-	tList
-	}
+    tList <- list()
+    tList <- .readIn(folderLoc, tList, 30)
+    len <- c()
+    for (i in 1:length(tList)){
+      len[i] <- length(tList[[i]][,1])
+    }
+    temp <- data.frame(names = names(tList), len)
+    redo <- subset(temp, len==1, names)	
+    tList
+  }
 
 .readIn <-function(directoryPath, newList = list(), numDig=30) {
-	currDir <- getwd()
-	# print(currDir)
-	getData <- function(i, newList, names) {
-		if (i > length(dir())){
-			names(newList) <- names
-			print(names(newList))
-			setwd(currDir)
-			return (newList)
-			}
-		else {
-			allLines <-  aggregate(.load.data(dir()[i])$x,  .load.data(dir()[i])["distance"], mean)
-			newList[[length(newList)+1L]] <-  data.frame(distance = allLines[,1]*40/length(allLines[,1]), x= allLines[,2])
-			temp <- paste(substr(basename(dir()[i]),1,numDig), "", sep="")
-			names[i] <- strsplit(temp,".txt")[[1]][1]
-			getData(i+1, newList, names)
-		}
-	}
-	setwd(directoryPath)
-	i <-1
-	names <- c()
-	findMin <- c()
-	getData(i, newList, names)
+  currDir <- getwd()
+  # print(currDir)
+  getData <- function(i, newList, names) {
+    if (i > length(dir())){
+      names(newList) <- names
+      print(names(newList))
+      setwd(currDir)
+      return (newList)
+    }
+    else {
+      allLines <-  aggregate(.load.data(dir()[i])$x,  .load.data(dir()[i])["distance"], mean)
+      newList[[length(newList)+1L]] <-  data.frame(distance = allLines[,1]*40/length(allLines[,1]), x= allLines[,2])
+      temp <- paste(substr(basename(dir()[i]),1,numDig), "", sep="")
+      names[i] <- strsplit(temp,".txt")[[1]][1]
+      getData(i+1, newList, names)
+    }
+  }
+  setwd(directoryPath)
+  i <-1
+  names <- c()
+  findMin <- c()
+  getData(i, newList, names)
 }
 
 .load.data <-
-function(filename) {
-	d <- read.csv(filename, header=TRUE, sep="\t")
-   names(d) <- c("count", "distance","x")
-   d
- }
-
-
-
+  function(filename) {
+    d <- read.csv(filename, header=TRUE, sep="\t")
+    names(d) <- c("count", "distance","x")
+    d
+  }
 

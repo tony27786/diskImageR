@@ -1,13 +1,17 @@
-Package: diskImageR
-Title: A Pipeline to Analyze Resistance and Tolerance from Drug Disk
-        Diffusion Assays
-Version: 1.1.0.9001
+Package: diskImageR.apoc
+Title: Customized Pipeline to Analyze Resistance and Tolerance from Drug Disk Diffusion Assays
+Version: 1.1.0.9006
 Authors@R: c(
-	person("Aleeza", "Gerstein", email="aleeza.gerstein@umanitoba.ca", role=c("aut", "cre")),
-	person("Sonja", "Friesen", email="fries382@myumanitoba.ca", role=c("aut")),	
-	person("Nazli", "Tahmasebi", email="tahmasef@myumanitoba.ca", role=c("aut")),	
-	person("Inbal", "Hecht", email="inbal.hecht@gmail.com", role="ctb"))
-Description: A pipeline to analyze photographs of drug disk diffusion plates. This removes the need to analyze the plates themselves, and thus analysis can be done separate from the assay. Furthermore, diskImageR removes potential researcher bias, by quantitative assessment of drug resistance as the zone diameter at multiple cutoff values of growth inhibition. This method also extends the disk diffusion assay by measuring drug tolerance (in addition to drug resistance) as the fraction of the subpopulation that is able to grow above the resistance point ("FoG").
+    person("Aleeza", "Gerstein", email = "aleeza.gerstein@umanitoba.ca", role = "aut"),
+    person("Sonja", "Friesen", email = "fries382@myumanitoba.ca", role = "aut"),
+    person("Nazli", "Tahmasebi", email = "tahmasef@myumanitoba.ca", role = "aut"),
+    person("Inbal", "Hecht", email = "inbal.hecht@gmail.com", role = "ctb"),
+    person("Joseph", "Apoc", email = "tony27786@icloud.com", role = c("ctb", "cre"))
+)
+Description: A customized version of the original diskImageR package for
+    analyzing photographs of drug disk diffusion plates. This version includes
+    local modifications to support updated image processing and batch analysis
+    workflows.
 Depends: R (>= 3.0.3)
 SystemRequirements: ImageJ (all OS), Xcode (Mac)
 License: GPL-3
@@ -16,9 +20,4 @@ Suggests: knitr
 RoxygenNote: 7.2.3
 Encoding: UTF-8
 NeedsCompilation: no
-Packaged: 2023-09-15 16:34:05 UTC; acgerstein
-Author: Aleeza Gerstein [aut, cre],
-  Sonja Friesen [aut],
-  Nazli Tahmasebi [aut],
-  Inbal Hecht [ctb]
-Maintainer: Aleeza Gerstein <aleeza.gerstein@umanitoba.ca>
+Maintainer: Joseph Apoc <tony27786@icloud.com>
