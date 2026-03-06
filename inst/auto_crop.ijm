@@ -64,8 +64,9 @@ for (i = 0; i < list.length; i++) {
     open(inputDir + name);
     origTitle = getTitle();
 
-    run("Duplicate...", "title=__work");
-    selectWindow("__work");
+    workTitle = "__work_" + i;
+    run("Duplicate...", "title=" + workTitle);
+    selectWindow(workTitle);
     Image.removeScale;
     run("8-bit");
     run("Subtract Background...", "rolling=" + rolling + " sliding");
@@ -107,7 +108,7 @@ for (i = 0; i < list.length; i++) {
 
     if (best < 0) {
         print("Could not select best ROI: " + name + ", skipping...");
-        selectWindow("__work"); close();
+        selectWindow(workTitle); close();
         selectWindow(origTitle); close();
         roiManager("Reset");
         run("Clear Results");
@@ -118,12 +119,12 @@ for (i = 0; i < list.length; i++) {
     roiManager("Select", best);
     getSelectionBounds(x, y, w, h);
 
-    selectWindow("__work");
+    selectWindow(workTitle);
     imgArea = getWidth() * getHeight();
 
     if (bestArea > maxAreaFrac * imgArea) {
         print("Threshold likely failed (ROI too large) for " + name + ", skipping...");
-        selectWindow("__work"); close();
+        selectWindow(workTitle); close();
         selectWindow(origTitle); close();
         roiManager("Reset");
         run("Clear Results");
@@ -144,7 +145,7 @@ for (i = 0; i < list.length; i++) {
     saveAs("PNG", outDir + base + "_crop.png");
 
     close(); // cropped original
-    selectWindow("__work"); close();
+    selectWindow(workTitle); close();
 
     roiManager("Reset");
     run("Clear Results");
