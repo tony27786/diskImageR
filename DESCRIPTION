@@ -6,7 +6,7 @@ Authors@R: c(
     person("Sonja", "Friesen", email = "fries382@myumanitoba.ca", role = "aut"),
     person("Nazli", "Tahmasebi", email = "tahmasef@myumanitoba.ca", role = "aut"),
     person("Inbal", "Hecht", email = "inbal.hecht@gmail.com", role = "ctb"),
-    person("Joseph", "Apoc", email = "tony27786@icloud.com", role = c("ctb", "cre"))
+    person("Joseph", "Apoc", email = "tony27786@icloud.com", role = c("aut", "cre"))
 )
 Description: A customized version of the original diskImageR package for
     analyzing photographs of drug disk diffusion plates. This version includes
@@ -20,4 +20,3 @@ Suggests: knitr
 RoxygenNote: 7.2.3
 Encoding: UTF-8
 NeedsCompilation: no
-Maintainer: Joseph Apoc <tony27786@icloud.com>
