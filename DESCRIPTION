@@ -1,6 +1,6 @@
 Package: diskImageR
 Title: Customized Pipeline to Analyze Resistance and Tolerance from Drug Disk Diffusion Assays
-Version: 1.1.0.9011
+Version: 1.1.0.9016
 Authors@R: c(
     person("Aleeza", "Gerstein", email = "aleeza.gerstein@umanitoba.ca", role = "aut"),
     person("Sonja", "Friesen", email = "fries382@myumanitoba.ca", role = "aut"),
