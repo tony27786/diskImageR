@@ -9,7 +9,8 @@ IJMacro(
   projectDir = NA,
   photoDir = NA,
   imageJLoc = NA,
-  diskDiam = 6
+  diskDiam = 6,
+  debug = FALSE
 )
 }
 \arguments{

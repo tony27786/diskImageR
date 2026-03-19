@@ -17,6 +17,6 @@ SystemRequirements: ImageJ (all OS), Xcode (Mac)
 License: GPL-3
 Imports: zoo, subplex, tcltk, methods
 Suggests: knitr
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.3
 Encoding: UTF-8
 NeedsCompilation: no
