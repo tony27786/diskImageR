@@ -8,7 +8,7 @@ AutoCrop(
   photoDir,
   outputDir,
   imageJLoc = NA,
-  macroName = "auto_crop.ijm",
+  plate = c("standard", "six"),
   debug = FALSE
 )
 }
@@ -20,8 +20,10 @@ AutoCrop(
 \item{imageJLoc}{Absolute path to Fiji/ImageJ app folder. If \code{NA},
 the function will try common default locations on macOS.}
 
-\item{macroName}{Name of the macro file inside the installed package.
-Defaults to \code{"auto_crop.ijm"}.}
+\item{plate}{Character string specifying which macro to use.
+Must be either \code{"standard"} or \code{"six"}.
+\code{"standard"} maps to \code{"auto_crop.ijm"} and
+\code{"six"} maps to \code{"auto_crop_six.ijm"}.}
 
 \item{debug}{Logical. Whether to print debug messages.}
 }
@@ -30,5 +32,5 @@ Invisibly returns the normalized output directory path.
 }
 \description{
 \code{AutoCrop} runs a Fiji/ImageJ macro stored in the package
-to automatically crop 90mm plate images from a black background.
+to automatically crop plate images from a black background.
 }

@@ -2,26 +2,36 @@
 #'
 #' @description
 #' \code{AutoCrop} runs a Fiji/ImageJ macro stored in the package
-#' to automatically crop 90mm plate images from a black background.
+#' to automatically crop plate images from a black background.
 #'
 #' @param photoDir Path to the input image folder.
 #' @param outputDir Path to the output folder where cropped images will be saved.
 #' @param imageJLoc Absolute path to Fiji/ImageJ app folder. If \code{NA},
 #' the function will try common default locations on macOS.
-#' @param macroName Name of the macro file inside the installed package.
-#' Defaults to \code{"auto_crop.ijm"}.
+#' @param plate Character string specifying which macro to use.
+#' Must be either \code{"standard"} or \code{"six"}.
+#' \code{"standard"} maps to \code{"auto_crop.ijm"} and
+#' \code{"six"} maps to \code{"auto_crop_six.ijm"}.
 #' @param debug Logical. Whether to print debug messages.
 #'
 #' @return
 #' Invisibly returns the normalized output directory path.
 #'
 #' @export
-
 AutoCrop <- function(photoDir,
                      outputDir,
                      imageJLoc = NA,
-                     macroName = "auto_crop.ijm",
+                     plate = c("standard", "six"),
                      debug = FALSE) {
+  
+  # validate plate type
+  plate <- match.arg(plate)
+  
+  macro_file <- switch(
+    plate,
+    standard = "auto_crop.ijm",
+    six = "auto_crop_six.ijm"
+  )
   
   # check input directory
   if (missing(photoDir) || is.na(photoDir) || !dir.exists(photoDir)) {
@@ -29,7 +39,7 @@ AutoCrop <- function(photoDir,
   }
   
   # normalize paths
-  photoDir  <- normalizePath(photoDir, winslash = "/", mustWork = TRUE)
+  photoDir <- normalizePath(photoDir, winslash = "/", mustWork = TRUE)
   
   if (!dir.exists(outputDir)) {
     dir.create(outputDir, recursive = TRUE, showWarnings = FALSE)
@@ -45,17 +55,18 @@ AutoCrop <- function(photoDir,
   }
   
   # locate macro inside installed package
-  # If your macro is stored elsewhere in the package, adjust this line.
-  script <- system.file(macroName, package = "diskImageR")
+  script <- system.file(macro_file, package = "diskImageR")
   
   if (script == "") {
-    stop("Could not find macro file in package: ", macroName,
-         ". Please check where `auto_crop.ijm` is installed.")
+    stop("Could not find macro file in package: ", macro_file,
+         ". Please check that the macro is installed correctly.")
   }
   
   IJarguments <- paste(photoDir, outputDir, sep = "*")
   
   if (debug) {
+    message("DEBUG: plate: ", plate)
+    message("DEBUG: macro_file: ", macro_file)
     message("DEBUG: photoDir: ", photoDir)
     message("DEBUG: outputDir: ", outputDir)
     message("DEBUG: script: ", script)
@@ -124,7 +135,7 @@ AutoCrop <- function(photoDir,
       "ImageJ-linux"
     )
     
-    binary_path <- NA
+    binary_path <- NA_character_
     if (debug) message("Searching for ImageJ/Fiji executable in: ", macos_dir)
     
     for (exe in candidates) {
