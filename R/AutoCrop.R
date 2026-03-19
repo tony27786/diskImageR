@@ -155,20 +155,29 @@ AutoCrop <- function(photoDir,
       stop("Found app at ", app_path, " but no runnable launcher in ", macos_dir)
     }
     
-    if (debug) message("Executing Fiji/ImageJ at: ", binary_path)
-    
     res <- system2(
       binary_path,
       args = c("-macro", script, IJarguments),
       stdout = TRUE,
-      stderr = TRUE
+      stderr = TRUE,
+      wait = TRUE
     )
+    
+    exit_status <- attr(res, "status")
+    if (is.null(exit_status)) exit_status <- 0L
+    success <- identical(exit_status, 0L)
     
     if (debug) {
       cat("===== Fiji/ImageJ stdout/stderr =====\n")
       cat(paste(res, collapse = "\n"), "\n")
       cat("=====================================\n")
     }
+  }
+  
+  if (success) {
+    message("AutoCrop completed successfully. Cropped images written to: ", outputDir)
+  } else {
+    message("AutoCrop finished with errors (exit status: ", exit_status, "). Please check the Fiji/ImageJ output above.")
   }
   
   invisible(outputDir)
