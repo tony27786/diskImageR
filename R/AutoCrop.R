@@ -1,8 +1,8 @@
 #' Run Fiji/ImageJ auto-crop macro on a folder of images
 #'
 #' @description
-#' \code{AutoCropMacro} runs a Fiji/ImageJ macro stored in the package
-#' to automatically crop plate images from a black background.
+#' \code{AutoCrop} runs a Fiji/ImageJ macro stored in the package
+#' to automatically crop 90mm plate images from a black background.
 #'
 #' @param photoDir Path to the input image folder.
 #' @param outputDir Path to the output folder where cropped images will be saved.
@@ -17,11 +17,11 @@
 #'
 #' @export
 
-AutoCropMacro <- function(photoDir,
-                          outputDir,
-                          imageJLoc = NA,
-                          macroName = "auto_crop.ijm",
-                          debug = FALSE) {
+AutoCrop <- function(photoDir,
+                     outputDir,
+                     imageJLoc = NA,
+                     macroName = "auto_crop.ijm",
+                     debug = FALSE) {
   
   # check input directory
   if (missing(photoDir) || is.na(photoDir) || !dir.exists(photoDir)) {

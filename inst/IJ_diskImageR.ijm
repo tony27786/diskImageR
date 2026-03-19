@@ -458,3 +458,6 @@ print("Successful files: " + successCount);
 print("Failed files: " + failedCount);
 print("===== Failed file list =====");
 print(failedList);
+print("This batch will end after 5 seconds");
+wait(5000);
+run("Quit");

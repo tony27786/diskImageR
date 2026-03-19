@@ -43,9 +43,8 @@ for (i = 0; i < list.length; i++) {
     }
 }
 print("Total image files: " + total);
-
-// IMPORTANT: use GUI mode for stability
 setBatchMode(false);
+
 
 for (i = 0; i < list.length; i++) {
     name = list[i];
@@ -53,6 +52,7 @@ for (i = 0; i < list.length; i++) {
     if (!(endsWith(name, ".jpg") || endsWith(name, ".jpeg") ||
           endsWith(name, ".png") || endsWith(name, ".tif") || endsWith(name, ".tiff")))
         continue;
+
 
     print("Cropping " + (processed + 1) + "/" + total + ": " + name);
     showStatus("Cropping " + (processed + 1) + "/" + total + ": " + name);
@@ -82,11 +82,12 @@ for (i = 0; i < list.length; i++) {
 
     if (roiManager("count") == 0) {
         print("No suitable dish ROI found: " + name + ", skipping...");
-        close(); // __work
+        close(); // work
         selectWindow(origTitle); close();
         roiManager("Reset");
         run("Clear Results");
         processed++;
+        setBatchMode(false);
         continue;
     }
 
@@ -113,6 +114,7 @@ for (i = 0; i < list.length; i++) {
         roiManager("Reset");
         run("Clear Results");
         processed++;
+        setBatchMode(false);
         continue;
     }
 
@@ -129,6 +131,7 @@ for (i = 0; i < list.length; i++) {
         roiManager("Reset");
         run("Clear Results");
         processed++;
+        setBatchMode(false);
         continue;
     }
 
@@ -151,6 +154,11 @@ for (i = 0; i < list.length; i++) {
     run("Clear Results");
 
     processed++;
+
+    // end-of-iteration flush
 }
 
 print("Done. Cropped images saved to: " + outDir);
+print("This batch will end after 5 seconds");
+wait(5000);
+run("Quit");
