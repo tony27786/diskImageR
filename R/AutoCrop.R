@@ -21,11 +21,14 @@
 AutoCrop <- function(photoDir,
                      outputDir,
                      imageJLoc = NA,
-                     plate = c("standard", "six"),
+                     plate,
                      debug = FALSE) {
   
   # validate plate type
-  plate <- match.arg(plate)
+  if (missing(plate) || length(plate) != 1 || is.na(plate) ||
+      !plate %in% c("standard", "six")) {
+    stop("`plate` must be exactly one of: \"standard\" or \"six\".")
+  }
   
   macro_file <- switch(
     plate,
