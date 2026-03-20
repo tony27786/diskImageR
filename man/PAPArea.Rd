@@ -4,15 +4,15 @@
 \alias{PAPArea}
 \title{Run Fiji/ImageJ PAP area quantification macro on a folder of images}
 \usage{
-PAPArea(inputDir, outputDir, roiZip = NULL, imageJLoc = NA, debug = FALSE)
+PAPArea(inputDir, projectDir, roiZip = NULL, imageJLoc = NA, debug = FALSE)
 }
 \arguments{
 \item{inputDir}{Path to the input image folder.}
 
-\item{outputDir}{Path to the output folder where result files will be saved.}
+\item{projectDir}{Path to the output folder where result files will be saved.}
 
 \item{roiZip}{Path to the ROI zip file. If \code{NULL}, the function will try
-to use the default ROI template \code{pap2.zip} stored in the installed package.}
+to use the default ROI template \code{papROISet.zip} stored in the installed package.}
 
 \item{imageJLoc}{Absolute path to Fiji/ImageJ app folder. If \code{NA},
 the function will try common default locations on macOS.}
