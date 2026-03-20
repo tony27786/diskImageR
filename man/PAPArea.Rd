@@ -4,26 +4,52 @@
 \alias{PAPArea}
 \title{Run Fiji/ImageJ PAP area quantification macro on a folder of images}
 \usage{
-PAPArea(inputDir, projectDir, roiZip = NULL, imageJLoc = NA, debug = FALSE)
+PAPArea(
+  inputDir,
+  projectDir,
+  projectName = NULL,
+  roiZip = NULL,
+  wellOrder = c("TL", "TM", "TR", "BL", "BM", "BR"),
+  imageJLoc = NA,
+  overwrite = FALSE,
+  debug = FALSE
+)
 }
 \arguments{
 \item{inputDir}{Path to the input image folder.}
 
 \item{projectDir}{Path to the output folder where result files will be saved.}
 
+\item{projectName}{Optional character string. If provided, the resulting data
+frame will also be assigned into the global environment using this name.}
+
 \item{roiZip}{Path to the ROI zip file. If \code{NULL}, the function will try
 to use the default ROI template \code{papROISet.zip} stored in the installed package.}
+
+\item{wellOrder}{Character vector of length 6 defining the true PAP gradient
+order from the lowest to the highest antibiotic concentration. The values must
+be a permutation of \code{c("TL", "TM", "TR", "BL", "BM", "BR")}. The default is
+\code{c("TL", "TM", "TR", "BL", "BM", "BR")}.}
 
 \item{imageJLoc}{Absolute path to Fiji/ImageJ app folder. If \code{NA},
 the function will try common default locations on macOS.}
 
+\item{overwrite}{Logical. Whether to overwrite existing PAP output files
+in \code{projectDir}. Default is \code{FALSE}.}
+
 \item{debug}{Logical. Whether to print debug messages.}
 }
 \value{
-Invisibly returns the normalized output directory path.
+A data frame containing PAP area quantification results.
+In addition to the raw \code{well} column from Fiji output, the returned data
+frame contains:
+\itemize{
+  \item \code{pap_step}: ordered factor representing PAP gradient order
+  \item \code{pap_index}: integer index from 1 to 6 for PAP gradient order
+}
 }
 \description{
 \code{PAPArea} runs a Fiji/ImageJ macro stored in the package
 to quantify PAP positive area percentage for 6-well plate images
-using one common threshold per image.
+using one common threshold per image, then reads the output CSV back into R.
 }
