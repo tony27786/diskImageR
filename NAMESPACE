@@ -3,6 +3,7 @@
 export(AutoCrop)
 export(IJMacro)
 export(IJMacro16)
+export(PAPArea)
 export(addType)
 export(aggregateData)
 export(calcMIC)

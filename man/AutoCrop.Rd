@@ -4,13 +4,7 @@
 \alias{AutoCrop}
 \title{Run Fiji/ImageJ auto-crop macro on a folder of images}
 \usage{
-AutoCrop(
-  photoDir,
-  outputDir,
-  imageJLoc = NA,
-  plate = c("standard", "six"),
-  debug = FALSE
-)
+AutoCrop(photoDir, outputDir, imageJLoc = NA, plate, debug = FALSE)
 }
 \arguments{
 \item{photoDir}{Path to the input image folder.}
