@@ -6,9 +6,9 @@
 #' using one common threshold per image.
 #'
 #' @param inputDir Path to the input image folder.
-#' @param outputDir Path to the output folder where result files will be saved.
+#' @param projectDir Path to the output folder where result files will be saved.
 #' @param roiZip Path to the ROI zip file. If \code{NULL}, the function will try
-#' to use the default ROI template \code{pap2.zip} stored in the installed package.
+#' to use the default ROI template \code{papROISet.zip} stored in the installed package.
 #' @param imageJLoc Absolute path to Fiji/ImageJ app folder. If \code{NA},
 #' the function will try common default locations on macOS.
 #' @param debug Logical. Whether to print debug messages.
@@ -18,7 +18,7 @@
 #'
 #' @export
 PAPArea <- function(inputDir,
-                    outputDir,
+                    projectDir,
                     roiZip = NULL,
                     imageJLoc = NA,
                     debug = FALSE) {
@@ -31,10 +31,10 @@ PAPArea <- function(inputDir,
   # normalize paths
   inputDir <- normalizePath(inputDir, winslash = "/", mustWork = TRUE)
   
-  if (!dir.exists(outputDir)) {
-    dir.create(outputDir, recursive = TRUE, showWarnings = FALSE)
+  if (!dir.exists(projectDir)) {
+    dir.create(projectDir, recursive = TRUE, showWarnings = FALSE)
   }
-  outputDir <- normalizePath(outputDir, winslash = "/", mustWork = FALSE)
+  projectDir <- normalizePath(projectDir, winslash = "/", mustWork = FALSE)
   
   # locate default ROI template if not provided
   if (is.null(roiZip)) {
@@ -53,8 +53,8 @@ PAPArea <- function(inputDir,
   if (substr(inputDir, nchar(inputDir), nchar(inputDir)) != "/") {
     inputDir <- paste0(inputDir, "/")
   }
-  if (substr(outputDir, nchar(outputDir), nchar(outputDir)) != "/") {
-    outputDir <- paste0(outputDir, "/")
+  if (substr(projectDir, nchar(projectDir), nchar(projectDir)) != "/") {
+    projectDir <- paste0(projectDir, "/")
   }
   
   # locate macro inside installed package
@@ -66,11 +66,11 @@ PAPArea <- function(inputDir,
          ". Please re-install the package.")
   }
   
-  IJarguments <- paste(inputDir, outputDir, roiZip, sep = "*")
+  IJarguments <- paste(inputDir, projectDir, roiZip, sep = "*")
   
   if (debug) {
     message("DEBUG: inputDir: ", inputDir)
-    message("DEBUG: outputDir: ", outputDir)
+    message("DEBUG: projectDir: ", projectDir)
     message("DEBUG: roiZip: ", roiZip)
     message("DEBUG: script: ", script)
     message("DEBUG: IJarguments: ", IJarguments)
@@ -191,16 +191,16 @@ PAPArea <- function(inputDir,
   }
   
   # optional file existence check
-  csv_file <- file.path(outputDir, "pap_area_results.csv")
+  csv_file <- file.path(projectDir, "pap_area_results.csv")
   
   if (success && file.exists(csv_file)) {
-    message("PAPArea completed successfully. Results written to: ", outputDir)
+    message("PAPArea completed successfully. Results written to: ", projectDir)
   } else if (success && !file.exists(csv_file)) {
-    message("PAPArea finished without command error, but `pap_area_results.csv` was not found in: ", outputDir)
+    message("PAPArea finished without command error, but `pap_area_results.csv` was not found in: ", projectDir)
   } else {
     message("PAPArea finished with errors (exit status: ", exit_status,
             "). Please check the Fiji/ImageJ output above.")
   }
   
-  invisible(outputDir)
+  invisible(projectDir)
 }
