@@ -47,21 +47,47 @@ IJMacro <-
     
     # Dealing with "~" mark
     projectDir <- normalizePath(projectDir, winslash = "/", mustWork = FALSE)
-    photoDir   <- normalizePath(photoDir, winslash = "/", mustWork = FALSE)
-    # Dealing with path "/" mark
+    photoDir   <- normalizePath(photoDir, winslash = "/", mustWork = TRUE)
+    
+    # photoDir must exist
+    if (!dir.exists(photoDir)) {
+      stop("photoDir does not exist: ", photoDir)
+    }
+    
+    # Set working directory to photoDir
     setwd(photoDir)
+    
+    # Ensure trailing slash on photoDir
     if (substr(photoDir, nchar(photoDir), nchar(photoDir)) != "/") {
       photoDir <- paste0(photoDir, "/")
     }
     
-    if (TRUE %in% file.info(dir())[,2]) {
+    # Check that photoDir contains files only, not subfolders
+    photo_info <- file.info(list.files(photoDir, all.files = FALSE, no.. = TRUE, full.names = TRUE))
+    if (nrow(photo_info) > 0 && any(photo_info$isdir, na.rm = TRUE)) {
       stop("There is a folder located in your photograph directory. Please remove before continuing.")
     }
-    dir.create(file.path(projectDir, "imageJ_out"), showWarnings=FALSE)
-    outputDir <- file.path(projectDir, "imageJ_out", fileDir, "")
-    # Dealing with output path "/" mark
+    
+    # Ensure projectDir itself exists
+    dir.create(projectDir, recursive = TRUE, showWarnings = FALSE)
+    
+    if (!dir.exists(projectDir)) {
+      stop("projectDir could not be created: ", projectDir)
+    }
+    
+    # Create required output directories
+    dir.create(file.path(projectDir, "imageJ_out"), recursive = TRUE, showWarnings = FALSE)
+    
+    outputDir <- file.path(projectDir, "imageJ_out", fileDir)
+    dir.create(outputDir, recursive = TRUE, showWarnings = FALSE)
+    
+    # Ensure trailing slash on outputDir
     if (substr(outputDir, nchar(outputDir), nchar(outputDir)) != "/") {
       outputDir <- paste0(outputDir, "/")
+    }
+    
+    if (!dir.exists(outputDir)) {
+      stop("outputDir could not be created: ", outputDir)
     }
     IJarguments <- paste(photoDir, outputDir, diskDiam, sep="*")
     # ===== Debug Settings =====
@@ -72,21 +98,23 @@ IJMacro <-
       message("DEBUG: IJarguments: ", IJarguments)
     }
     # ==========================
-    if(length(dir(outputDir)) > 0){
-      cont <- readline(paste("Output files exist in directory ", outputDir, "\nOverwrite? [y/n] ", sep=""))
-      if(cont=="n"){
+    if (length(list.files(outputDir, all.files = FALSE, no.. = TRUE)) > 0) {
+      cont <- readline(paste("Output files exist in directory ", outputDir, "\nOverwrite? [y/n] ", sep = ""))
+      if (cont == "n") {
         stop("Please delete existing files or change project name before continuing.")
       }
-      if(cont=="y"){
-        unlink(outputDir, recursive = TRUE)
+      if (cont == "y") {
+        unlink(outputDir, recursive = TRUE, force = TRUE)
+        dir.create(outputDir, recursive = TRUE, showWarnings = FALSE)
       }
     }
     
-    dir.create(file.path(outputDir), showWarnings= FALSE)
-    dir.create(file.path(projectDir, "figures"), showWarnings=FALSE)
-    dir.create(file.path(projectDir, "figures", fileDir), showWarnings=FALSE)
-    dir.create(file.path(projectDir, "parameter_files"), showWarnings=FALSE)
-    dir.create(file.path(projectDir, "parameter_files", fileDir), showWarnings=FALSE)	
+    dir.create(file.path(projectDir, "figures", fileDir), recursive = TRUE, showWarnings = FALSE)
+    dir.create(file.path(projectDir, "parameter_files", fileDir), recursive = TRUE, showWarnings = FALSE)
+    
+    if (!dir.exists(outputDir)) {
+      stop("outputDir disappeared before Fiji execution: ", outputDir)
+    }
     
     script <- file.path(.libPaths(), "diskImageR", "IJ_diskImageR.ijm")[1]
     if(.Platform$OS.type=="windows"){
