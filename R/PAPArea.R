@@ -306,4 +306,6 @@ PAPArea <- function(inputDir,
     message("PAPArea completed successfully. Results written to: ", projectDir)
   }
   
+  return(pap_df)
+  
 }
