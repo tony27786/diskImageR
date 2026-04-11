@@ -26,7 +26,7 @@ blurSigma   = 2;
 pad         = 40;
 thrMethod   = "Otsu";
 minSize     = 50000;
-minCirc     = 0.30;
+minCirc     = 0.22;
 maxCirc     = 1.00;
 maxAreaFrac = 0.95;
 // ----------------------------
