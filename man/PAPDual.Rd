@@ -2,7 +2,7 @@
 % Please edit documentation in R/PAPDual.R
 \name{PAPDual}
 \alias{PAPDual}
-\title{Process dual-plate PAPArea results and merge into a unified FLC gradient table}
+\title{Process dual-plate PAP results and merge into a unified FLC gradient table}
 \usage{
 PAPDual(
   inputDir = NULL,
@@ -15,20 +15,21 @@ PAPDual(
   debug = FALSE,
   return_mode = c("all", "avg"),
   assign_global = TRUE,
-  run_macro = TRUE
+  run_macro = TRUE,
+  normalize = TRUE,
+  blank_csv = NULL
 )
 }
 \arguments{
 \item{inputDir}{Character scalar. Directory containing input PAP images.
 Passed to \code{PAPArea()} when \code{run_macro = TRUE}. Can be \code{NULL}
-if an existing \code{pap_area_results.csv} file is used.}
+if an existing CSV file is used.}
 
 \item{projectDir}{Character scalar. Directory used to store or read PAPArea
-results, including \code{pap_area_results.csv}.}
+results.}
 
 \item{projectName}{Optional character scalar. Name of the object to create in
-the global environment when \code{assign_global = TRUE}. If \code{NULL}, no
-object is assigned automatically.}
+the global environment when \code{assign_global = TRUE}.}
 
 \item{roiZip}{Optional character scalar. Path to the ROI zip file used by
 \code{PAPArea()}.}
@@ -43,33 +44,30 @@ Passed to \code{PAPArea()}. Defaults to \code{NA}.}
 \item{overwrite}{Logical. Whether existing outputs should be overwritten when
 running \code{PAPArea()}.}
 
-\item{debug}{Logical. Whether to print additional debugging information during
-macro execution.}
+\item{debug}{Logical. Whether to print additional debugging information.}
 
-\item{return_mode}{Character scalar. Either \code{"all"} or \code{"avg"}.
-If \code{"all"}, the function returns a list containing raw results, overlap
-QC, and averaged results. If \code{"avg"}, only the averaged PAP table is
-returned.}
+\item{return_mode}{Character scalar. Either \code{"all"} or \code{"avg"}.}
 
 \item{assign_global}{Logical. Whether to assign the returned object into the
 global environment when \code{projectName} is not \code{NULL}.}
 
 \item{run_macro}{Logical. If \code{TRUE}, run \code{PAPArea()} first. If
-\code{FALSE}, skip macro execution and directly read an existing
-\code{pap_area_results.csv} file from \code{projectDir}.}
+\code{FALSE}, skip macro execution and directly read an existing CSV.}
+
+\item{normalize}{Logical. If \code{TRUE} (default), perform 128-well
+normalization using the H-plate BR well as per-sample internal zero.}
+
+\item{blank_csv}{Optional character scalar. Path to a blank-plate
+\code{pap_feature_results.csv} for per-well-position illumination correction.
+If \code{NULL} (default), blank correction is skipped.}
 }
 \value{
 If \code{return_mode = "all"}, a named list with three elements:
 \describe{
-  \item{raw}{A data frame containing annotated PAP results for each image and
-  well, including parsed sample ID, plate type, well identity, PAP order,
-  and mapped fluconazole concentration.}
-  \item{overlap_qc}{A data frame for duplicated concentrations shared between
-  H and L plates (0 and 8), containing plate-specific values and their
-  difference.}
-  \item{avg}{A data frame summarising mean \code{percent_area},
-  \code{roi_area}, and \code{pos_area} for each sample-by-concentration
-  combination.}
+  \item{raw}{Annotated per-image, per-well results with normalization columns.}
+  \item{overlap_qc}{Comparison of duplicated concentrations (0 and 8 ug/mL)
+  between H and L plates.}
+  \item{avg}{Averaged summary per sample-by-concentration.}
 }
 
 If \code{return_mode = "avg"}, only the averaged summary data frame is
@@ -79,11 +77,11 @@ returned.
 \code{PAPDual()} is a wrapper around \code{PAPArea()} for processing
 PAP experiments performed on paired low- and high-concentration fluconazole
 plates. It supports running the ImageJ/Fiji macro through \code{PAPArea()},
-or directly reading an existing \code{pap_area_results.csv} file from
+or directly reading an existing \code{pap_feature_results.csv} file from
 \code{projectDir}. The function parses sample identifiers and plate type
 (\code{H} or \code{L}) from image names, maps wells to predefined fluconazole
 concentrations, performs overlap quality control for duplicated concentrations,
-and returns both raw and averaged PAP area summaries.
+and returns both raw and averaged PAP summaries.
 }
 \details{
 The function assumes image file names follow a pattern such as
@@ -116,38 +114,43 @@ Fluconazole concentrations are assigned according to the well position:
   \item \code{BR = 128}
 }
 
+When \code{normalize = TRUE} (default), the H-plate BR well (128 ug/mL) is
+used as a per-sample internal zero reference. This well consistently shows
+no growth and controls for per-sample variation in agar opacity, inoculum
+density, and photography conditions. Normalized columns (\code{norm_mean},
+\code{norm_median}, \code{norm_intden}) are computed by subtracting the
+128-well baseline from the corresponding raw values.
+
+Optionally, a blank plate CSV (\code{blank_csv}) can be provided for
+additional per-well-position correction of illumination artifacts.
+
 The function generates three outputs:
 \itemize{
   \item \code{raw}: annotated per-image, per-well PAP results with parsed
-  sample ID, plate type, and mapped fluconazole concentration;
+  sample ID, plate type, mapped FLC concentration, and normalization columns;
   \item \code{overlap_qc}: comparison of duplicated concentrations shared
-  between plates (0 and 8 \eqn{\mu g/mL});
+  between plates (0 and 8 ug/mL);
   \item \code{avg}: merged sample-by-concentration table obtained by averaging
   duplicate concentrations across plates.
 }
-
-If \code{projectName} is provided and \code{assign_global = TRUE}, the result
-is also assigned into the global environment under the specified object name.
 }
 \examples{
 \dontrun{
-# Run macro, process paired H/L plates, and return full output
+# Run macro + 128-well normalization
 res <- PAPDual(
-  inputDir = "path/to/images",
-  projectDir = "path/to/project",
+  inputDir    = "path/to/images",
+  projectDir  = "path/to/project",
   projectName = "pap_dual_res",
-  roiZip = "path/to/papROISet.zip",
-  imageJLoc = "/Applications/Fiji.app/ImageJ-linux64",
+  roiZip      = "path/to/papROISet.zip",
   return_mode = "all"
 )
 
-# Read existing pap_area_results.csv only
+# Read existing CSV, skip normalization
 avg_res <- PAPDual(
-  inputDir = NULL,
-  projectDir = "path/to/project",
-  run_macro = FALSE,
-  return_mode = "avg",
-  assign_global = FALSE
+  projectDir  = "path/to/project",
+  run_macro   = FALSE,
+  normalize   = FALSE,
+  return_mode = "avg"
 )
 }
 

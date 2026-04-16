@@ -41,7 +41,7 @@ for (i = 0; i < list.length; i++) {
     }
 }
 print("Total image files: " + total);
-setBatchMode(false);
+setBatchMode(true);
 
 for (i = 0; i < list.length; i++) {
     name = list[i];
@@ -59,10 +59,12 @@ for (i = 0; i < list.length; i++) {
 
     open(inputDir + name);
     origTitle = getTitle();
+    origID = getImageID();
 
     workTitle = "__work_" + i;
     run("Duplicate...", "title=" + workTitle);
-    selectWindow(workTitle);
+    workID = getImageID();
+    selectImage(workID);
     Image.removeScale;
     run("8-bit");
     run("Subtract Background...", "rolling=" + rolling + " sliding");
@@ -80,12 +82,11 @@ for (i = 0; i < list.length; i++) {
 
     if (roiManager("count") == 0) {
         print("Nothing found in " + name + ", skipping...");
-        close(); // work
-        selectWindow(origTitle); close();
+        close(); wait(50); // img
+        selectImage(origID); close(); wait(50);
         roiManager("Reset");
         run("Clear Results");
         processed++;
-        setBatchMode(false);
         continue;
     }
 
@@ -107,33 +108,31 @@ for (i = 0; i < list.length; i++) {
 
     if (best < 0) {
         print("Could not select best ROI: " + name + ", skipping...");
-        selectWindow(workTitle); close();
-        selectWindow(origTitle); close();
+        selectImage(workID); close(); wait(50);
+        selectImage(origID); close(); wait(50);
         roiManager("Reset");
         run("Clear Results");
         processed++;
-        setBatchMode(false);
         continue;
     }
 
     roiManager("Select", best);
     getSelectionBounds(x, y, w, h);
 
-    selectWindow(workTitle);
+    selectImage(workID);
     imgArea = getWidth() * getHeight();
 
     if (bestArea > maxAreaFrac * imgArea) {
         print("Threshold likely failed (ROI too large) for " + name + ", skipping...");
-        selectWindow(workTitle); close();
-        selectWindow(origTitle); close();
+        selectImage(workID); close(); wait(50);
+        selectImage(origID); close(); wait(50);
         roiManager("Reset");
         run("Clear Results");
         processed++;
-        setBatchMode(false);
         continue;
     }
 
-    selectWindow(origTitle);
+    selectImage(origID);
     x2 = maxOf(0, x - pad);
     y2 = maxOf(0, y - pad);
     w2 = minOf(getWidth()  - x2, w + 2 * pad);
@@ -145,8 +144,8 @@ for (i = 0; i < list.length; i++) {
     base = stripExtensions(name);
     saveAs("PNG", outDir + base + "_crop.png");
 
-    close(); // cropped original
-    selectWindow(workTitle); close();
+    close(); wait(50); // cropped original
+    selectImage(workID); close(); wait(50);
 
     roiManager("Reset");
     run("Clear Results");

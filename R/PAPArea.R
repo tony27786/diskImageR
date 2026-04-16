@@ -1,9 +1,9 @@
-#' Run Fiji/ImageJ PAP area quantification macro on a folder of images
+#' Run Fiji/ImageJ PAP feature extraction macro on a folder of images
 #'
 #' @description
 #' \code{PAPArea} runs a Fiji/ImageJ macro stored in the package
-#' to quantify PAP positive area percentage for 6-well plate images
-#' using one common threshold per image, then reads the output CSV back into R.
+#' to extract grayscale features (raw + CLAHE) for 6-well plate images,
+#' then reads the output CSV back into R.
 #'
 #' @param inputDir Path to the input image folder.
 #' @param projectDir Path to the output folder where result files will be saved.
@@ -22,12 +22,16 @@
 #' @param debug Logical. Whether to print debug messages.
 #'
 #' @return
-#' A data frame containing PAP area quantification results.
-#' In addition to the raw \code{well} column from Fiji output, the returned data
-#' frame contains:
-#' \itemize{
-#'   \item \code{pap_step}: ordered factor representing PAP gradient order
-#'   \item \code{pap_index}: integer index from 1 to 6 for PAP gradient order
+#' A data frame containing PAP feature extraction results with columns:
+#' \describe{
+#'   \item{image}{Source image filename (without extension)}
+#'   \item{well}{Well position (TL, TM, TR, BL, BM, BR)}
+#'   \item{roi_area}{ROI area in pixels}
+#'   \item{raw_mean, raw_median, raw_intden}{Pre-CLAHE absolute intensity features}
+#'   \item{mean_gray, median_gray, sd_gray, min_gray, max_gray, intden_gray, cv_gray}{Post-CLAHE texture features}
+#'   \item{dark_frac_40, dark_frac_60, dark_frac_80}{Dark pixel fraction at three thresholds}
+#'   \item{pap_step}{Ordered factor representing PAP gradient order}
+#'   \item{pap_index}{Integer index from 1 to 6 for PAP gradient order}
 #' }
 #'
 #' @export
@@ -100,15 +104,13 @@ PAPArea <- function(inputDir,
     projectDir <- paste0(projectDir, "/")
   }
   
-  # existing output check
-  csv_file <- file.path(projectDir, "pap_area_results.csv")
-  qc_dir <- file.path(projectDir, "qc")
-  mask_dir <- file.path(projectDir, "mask")
+  # ---- [CHANGED] CSV filename to match new pap.ijm ----
+  csv_file <- file.path(projectDir, "pap_feature_results.csv")
+  qc_dir   <- file.path(projectDir, "qc")
   
   existing_outputs <- c(
     csv_file[file.exists(csv_file)],
-    qc_dir[dir.exists(qc_dir)],
-    mask_dir[dir.exists(mask_dir)]
+    qc_dir[dir.exists(qc_dir)]
   )
   
   if (length(existing_outputs) > 0) {
@@ -122,7 +124,6 @@ PAPArea <- function(inputDir,
     } else {
       if (file.exists(csv_file)) file.remove(csv_file)
       if (dir.exists(qc_dir)) unlink(qc_dir, recursive = TRUE, force = TRUE)
-      if (dir.exists(mask_dir)) unlink(mask_dir, recursive = TRUE, force = TRUE)
     }
   }
   
@@ -266,13 +267,20 @@ PAPArea <- function(inputDir,
   }
   
   if (!file.exists(csv_file)) {
-    stop("PAPArea finished without command error, but `pap_area_results.csv` was not found in: ",
+    stop("PAPArea finished without command error, but `pap_feature_results.csv` was not found in: ",
          projectDir)
   }
   
   pap_df <- read.csv(csv_file, stringsAsFactors = FALSE, check.names = FALSE)
   
-  expected_cols <- c("image", "well", "roi_area", "pos_area", "percent_area")
+  # expected columns to match new pap.ijm output ----
+  expected_cols <- c(
+    "image", "well", "roi_area",
+    "raw_mean", "raw_median", "raw_intden",
+    "mean_gray", "median_gray", "sd_gray",
+    "min_gray", "max_gray", "intden_gray", "cv_gray",
+    "dark_frac_40", "dark_frac_60", "dark_frac_80"
+  )
   missing_cols <- setdiff(expected_cols, colnames(pap_df))
   if (length(missing_cols) > 0) {
     warning("Output CSV is missing expected columns: ",

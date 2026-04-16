@@ -2,7 +2,7 @@
 % Please edit documentation in R/PAPArea.R
 \name{PAPArea}
 \alias{PAPArea}
-\title{Run Fiji/ImageJ PAP area quantification macro on a folder of images}
+\title{Run Fiji/ImageJ PAP feature extraction macro on a folder of images}
 \usage{
 PAPArea(
   inputDir,
@@ -40,16 +40,20 @@ in \code{projectDir}. Default is \code{FALSE}.}
 \item{debug}{Logical. Whether to print debug messages.}
 }
 \value{
-A data frame containing PAP area quantification results.
-In addition to the raw \code{well} column from Fiji output, the returned data
-frame contains:
-\itemize{
-  \item \code{pap_step}: ordered factor representing PAP gradient order
-  \item \code{pap_index}: integer index from 1 to 6 for PAP gradient order
+A data frame containing PAP feature extraction results with columns:
+\describe{
+  \item{image}{Source image filename (without extension)}
+  \item{well}{Well position (TL, TM, TR, BL, BM, BR)}
+  \item{roi_area}{ROI area in pixels}
+  \item{raw_mean, raw_median, raw_intden}{Pre-CLAHE absolute intensity features}
+  \item{mean_gray, median_gray, sd_gray, min_gray, max_gray, intden_gray, cv_gray}{Post-CLAHE texture features}
+  \item{dark_frac_40, dark_frac_60, dark_frac_80}{Dark pixel fraction at three thresholds}
+  \item{pap_step}{Ordered factor representing PAP gradient order}
+  \item{pap_index}{Integer index from 1 to 6 for PAP gradient order}
 }
 }
 \description{
 \code{PAPArea} runs a Fiji/ImageJ macro stored in the package
-to quantify PAP positive area percentage for 6-well plate images
-using one common threshold per image, then reads the output CSV back into R.
+to extract grayscale features (raw + CLAHE) for 6-well plate images,
+then reads the output CSV back into R.
 }

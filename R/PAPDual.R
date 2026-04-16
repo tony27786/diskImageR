@@ -1,14 +1,14 @@
-#' Process dual-plate PAPArea results and merge into a unified FLC gradient table
+#' Process dual-plate PAP results and merge into a unified FLC gradient table
 #'
 #' @description
 #' \code{PAPDual()} is a wrapper around \code{PAPArea()} for processing
 #' PAP experiments performed on paired low- and high-concentration fluconazole
 #' plates. It supports running the ImageJ/Fiji macro through \code{PAPArea()},
-#' or directly reading an existing \code{pap_area_results.csv} file from
+#' or directly reading an existing \code{pap_feature_results.csv} file from
 #' \code{projectDir}. The function parses sample identifiers and plate type
 #' (\code{H} or \code{L}) from image names, maps wells to predefined fluconazole
 #' concentrations, performs overlap quality control for duplicated concentrations,
-#' and returns both raw and averaged PAP area summaries.
+#' and returns both raw and averaged PAP summaries.
 #'
 #' @details
 #' The function assumes image file names follow a pattern such as
@@ -41,29 +41,35 @@
 #'   \item \code{BR = 128}
 #' }
 #'
+#' When \code{normalize = TRUE} (default), the H-plate BR well (128 ug/mL) is
+#' used as a per-sample internal zero reference. This well consistently shows
+#' no growth and controls for per-sample variation in agar opacity, inoculum
+#' density, and photography conditions. Normalized columns (\code{norm_mean},
+#' \code{norm_median}, \code{norm_intden}) are computed by subtracting the
+#' 128-well baseline from the corresponding raw values.
+#'
+#' Optionally, a blank plate CSV (\code{blank_csv}) can be provided for
+#' additional per-well-position correction of illumination artifacts.
+#'
 #' The function generates three outputs:
 #' \itemize{
 #'   \item \code{raw}: annotated per-image, per-well PAP results with parsed
-#'   sample ID, plate type, and mapped fluconazole concentration;
+#'   sample ID, plate type, mapped FLC concentration, and normalization columns;
 #'   \item \code{overlap_qc}: comparison of duplicated concentrations shared
-#'   between plates (0 and 8 \eqn{\mu g/mL});
+#'   between plates (0 and 8 ug/mL);
 #'   \item \code{avg}: merged sample-by-concentration table obtained by averaging
 #'   duplicate concentrations across plates.
 #' }
 #'
-#' If \code{projectName} is provided and \code{assign_global = TRUE}, the result
-#' is also assigned into the global environment under the specified object name.
-#'
 #' @param inputDir Character scalar. Directory containing input PAP images.
 #' Passed to \code{PAPArea()} when \code{run_macro = TRUE}. Can be \code{NULL}
-#' if an existing \code{pap_area_results.csv} file is used.
+#' if an existing CSV file is used.
 #'
 #' @param projectDir Character scalar. Directory used to store or read PAPArea
-#' results, including \code{pap_area_results.csv}.
+#' results.
 #'
 #' @param projectName Optional character scalar. Name of the object to create in
-#' the global environment when \code{assign_global = TRUE}. If \code{NULL}, no
-#' object is assigned automatically.
+#' the global environment when \code{assign_global = TRUE}.
 #'
 #' @param roiZip Optional character scalar. Path to the ROI zip file used by
 #' \code{PAPArea()}.
@@ -78,60 +84,54 @@
 #' @param overwrite Logical. Whether existing outputs should be overwritten when
 #' running \code{PAPArea()}.
 #'
-#' @param debug Logical. Whether to print additional debugging information during
-#' macro execution.
+#' @param debug Logical. Whether to print additional debugging information.
 #'
 #' @param return_mode Character scalar. Either \code{"all"} or \code{"avg"}.
-#' If \code{"all"}, the function returns a list containing raw results, overlap
-#' QC, and averaged results. If \code{"avg"}, only the averaged PAP table is
-#' returned.
 #'
 #' @param assign_global Logical. Whether to assign the returned object into the
 #' global environment when \code{projectName} is not \code{NULL}.
 #'
 #' @param run_macro Logical. If \code{TRUE}, run \code{PAPArea()} first. If
-#' \code{FALSE}, skip macro execution and directly read an existing
-#' \code{pap_area_results.csv} file from \code{projectDir}.
+#' \code{FALSE}, skip macro execution and directly read an existing CSV.
+#'
+#' @param normalize Logical. If \code{TRUE} (default), perform 128-well
+#' normalization using the H-plate BR well as per-sample internal zero.
+#'
+#' @param blank_csv Optional character scalar. Path to a blank-plate
+#' \code{pap_feature_results.csv} for per-well-position illumination correction.
+#' If \code{NULL} (default), blank correction is skipped.
 #'
 #' @return
 #' If \code{return_mode = "all"}, a named list with three elements:
 #' \describe{
-#'   \item{raw}{A data frame containing annotated PAP results for each image and
-#'   well, including parsed sample ID, plate type, well identity, PAP order,
-#'   and mapped fluconazole concentration.}
-#'   \item{overlap_qc}{A data frame for duplicated concentrations shared between
-#'   H and L plates (0 and 8), containing plate-specific values and their
-#'   difference.}
-#'   \item{avg}{A data frame summarising mean \code{percent_area},
-#'   \code{roi_area}, and \code{pos_area} for each sample-by-concentration
-#'   combination.}
+#'   \item{raw}{Annotated per-image, per-well results with normalization columns.}
+#'   \item{overlap_qc}{Comparison of duplicated concentrations (0 and 8 ug/mL)
+#'   between H and L plates.}
+#'   \item{avg}{Averaged summary per sample-by-concentration.}
 #' }
 #'
 #' If \code{return_mode = "avg"}, only the averaged summary data frame is
 #' returned.
 #'
-#' @seealso
-#' \code{\link{PAPArea}}
+#' @seealso \code{\link{PAPArea}}
 #'
 #' @examples
 #' \dontrun{
-#' # Run macro, process paired H/L plates, and return full output
+#' # Run macro + 128-well normalization
 #' res <- PAPDual(
-#'   inputDir = "path/to/images",
-#'   projectDir = "path/to/project",
+#'   inputDir    = "path/to/images",
+#'   projectDir  = "path/to/project",
 #'   projectName = "pap_dual_res",
-#'   roiZip = "path/to/papROISet.zip",
-#'   imageJLoc = "/Applications/Fiji.app/ImageJ-linux64",
+#'   roiZip      = "path/to/papROISet.zip",
 #'   return_mode = "all"
 #' )
 #'
-#' # Read existing pap_area_results.csv only
+#' # Read existing CSV, skip normalization
 #' avg_res <- PAPDual(
-#'   inputDir = NULL,
-#'   projectDir = "path/to/project",
-#'   run_macro = FALSE,
-#'   return_mode = "avg",
-#'   assign_global = FALSE
+#'   projectDir  = "path/to/project",
+#'   run_macro   = FALSE,
+#'   normalize   = FALSE,
+#'   return_mode = "avg"
 #' )
 #' }
 #'
@@ -147,7 +147,9 @@ PAPDual <- function(inputDir = NULL,
                     debug = FALSE,
                     return_mode = c("all", "avg"),
                     assign_global = TRUE,
-                    run_macro = TRUE) {
+                    run_macro = TRUE,
+                    normalize = TRUE,
+                    blank_csv = NULL) {
   
   return_mode <- match.arg(return_mode)
   
@@ -161,32 +163,32 @@ PAPDual <- function(inputDir = NULL,
     stop("Package 'tidyr' is required.")
   }
   
-  csv_file <- file.path(projectDir, "pap_area_results.csv")
+  # ---- [CHANGED] CSV filename ----
+  csv_file <- file.path(projectDir, "pap_feature_results.csv")
   
   # 1) get PAPArea result
   if (run_macro) {
     pap_raw <- PAPArea(
-      inputDir = inputDir,
-      projectDir = projectDir,
+      inputDir    = inputDir,
+      projectDir  = projectDir,
       projectName = NULL,
-      roiZip = roiZip,
-      wellOrder = wellOrder,
-      imageJLoc = imageJLoc,
-      overwrite = overwrite,
-      debug = debug
+      roiZip      = roiZip,
+      wellOrder   = wellOrder,
+      imageJLoc   = imageJLoc,
+      overwrite   = overwrite,
+      debug       = debug
     )
     
-    # If has no return, check the csv output
     if (is.null(pap_raw)) {
       if (!file.exists(csv_file)) {
-        stop("PAPArea returned NULL and no pap_area_results.csv was found in projectDir.")
+        stop("PAPArea returned NULL and no pap_feature_results.csv was found in projectDir.")
       }
       pap_raw <- read.csv(csv_file, stringsAsFactors = FALSE, check.names = FALSE)
     }
     
   } else {
     if (!file.exists(csv_file)) {
-      stop("`run_macro = FALSE`, but no pap_area_results.csv was found in projectDir:\n", csv_file)
+      stop("`run_macro = FALSE`, but no pap_feature_results.csv was found in projectDir:\n", csv_file)
     }
     pap_raw <- read.csv(csv_file, stringsAsFactors = FALSE, check.names = FALSE)
   }
@@ -208,11 +210,11 @@ PAPDual <- function(inputDir = NULL,
   # 3) image -> basename / sample_id / plate
   pap_annot <- pap_raw %>%
     dplyr::mutate(
-      image_raw = as.character(image),
+      image_raw  = as.character(image),
       image_base = stringr::str_remove(image_raw, "\\.[A-Za-z0-9]+$"),
       image_base = stringr::str_remove(image_base, "_crop$"),
-      sample_id = stringr::str_extract(image_base, "^[0-9]+"),
-      plate = stringr::str_extract(image_base, "[HL]$")
+      sample_id  = stringr::str_extract(image_base, "^[0-9]+"),
+      plate      = stringr::str_extract(image_base, "[HL]$")
     )
   
   # check file names
@@ -271,37 +273,127 @@ PAPDual <- function(inputDir = NULL,
     )
   }
   
-  # 6) overlap QC
+  # ---- [NEW] Optional blank-plate correction ----
+  if (!is.null(blank_csv)) {
+    if (!file.exists(blank_csv)) {
+      stop("blank_csv file not found: ", blank_csv)
+    }
+    blank_df <- read.csv(blank_csv, stringsAsFactors = FALSE, check.names = FALSE)
+    
+    blank_needed <- c("well", "raw_mean", "raw_median", "raw_intden")
+    blank_missing <- setdiff(blank_needed, colnames(blank_df))
+    if (length(blank_missing) > 0) {
+      stop("Blank CSV is missing columns: ", paste(blank_missing, collapse = ", "))
+    }
+    
+    # average across blank images per well position
+    blank_ref <- blank_df %>%
+      dplyr::group_by(well) %>%
+      dplyr::summarise(
+        blank_mean   = mean(raw_mean,   na.rm = TRUE),
+        blank_median = mean(raw_median, na.rm = TRUE),
+        blank_intden = mean(raw_intden, na.rm = TRUE),
+        .groups = "drop"
+      )
+    
+    pap_dual_raw <- pap_dual_raw %>%
+      dplyr::left_join(blank_ref, by = "well") %>%
+      dplyr::mutate(
+        raw_mean   = raw_mean   - blank_mean,
+        raw_median = raw_median - blank_median,
+        raw_intden = raw_intden - blank_intden
+      ) %>%
+      dplyr::select(-blank_mean, -blank_median, -blank_intden)
+    
+    message("Blank-plate correction applied from: ", blank_csv)
+  }
+  
+  # ---- [NEW] 128-well normalization ----
+  if (normalize) {
+    # H-plate BR well (flc = 128) as per-sample internal zero
+    zero_ref <- pap_dual_raw %>%
+      dplyr::filter(plate == "H", well == "BR") %>%
+      dplyr::select(
+        sample_id,
+        zero_mean   = raw_mean,
+        zero_median = raw_median,
+        zero_intden = raw_intden
+      )
+    
+    missing_zero <- setdiff(
+      unique(pap_dual_raw$sample_id),
+      zero_ref$sample_id
+    )
+    if (length(missing_zero) > 0) {
+      warning(
+        "128-well normalization: no H-plate BR data for samples:\n",
+        paste(missing_zero, collapse = ", "),
+        "\nThese samples will have NA in norm_* columns."
+      )
+    }
+    
+    pap_dual_raw <- pap_dual_raw %>%
+      dplyr::left_join(zero_ref, by = "sample_id") %>%
+      dplyr::mutate(
+        norm_mean   = raw_mean   - zero_mean,
+        norm_median = raw_median - zero_median,
+        norm_intden = raw_intden - zero_intden
+      ) %>%
+      dplyr::select(-zero_mean, -zero_median, -zero_intden)
+    
+    message("128-well normalization applied (H-plate BR as zero reference).")
+  }
+  
+  # ---- [CHANGED] overlap QC: raw_mean replaces percent_area ----
+  # Use norm_mean if normalization was applied, otherwise raw_mean
+  qc_metric <- if (normalize && "norm_mean" %in% colnames(pap_dual_raw)) {
+    "norm_mean"
+  } else {
+    "raw_mean"
+  }
+  
   overlap_qc <- pap_dual_raw %>%
     dplyr::filter(flc %in% c(0, 8)) %>%
-    dplyr::select(sample_id, plate, flc, percent_area) %>%
+    dplyr::select(sample_id, plate, flc, dplyr::all_of(qc_metric)) %>%
     tidyr::pivot_wider(
-      names_from = plate,
-      values_from = percent_area,
+      names_from  = plate,
+      values_from = dplyr::all_of(qc_metric),
       names_prefix = "plate_"
     ) %>%
     dplyr::mutate(
-      diff = plate_H - plate_L,
+      diff     = plate_H - plate_L,
       abs_diff = abs(diff)
     ) %>%
     dplyr::arrange(sample_id, flc)
   
-  # 7) combine duplicated concentrations
+  # ---- [CHANGED] averaging: new column set ----
+  # Build summarise expressions dynamically based on available columns
+  avg_cols <- c("roi_area", "raw_mean", "raw_median", "raw_intden",
+                "mean_gray", "median_gray", "sd_gray",
+                "min_gray", "max_gray", "intden_gray", "cv_gray",
+                "dark_frac_40", "dark_frac_60", "dark_frac_80")
+  
+  # Add norm columns if they exist
+  if (normalize && "norm_mean" %in% colnames(pap_dual_raw)) {
+    avg_cols <- c(avg_cols, "norm_mean", "norm_median", "norm_intden")
+  }
+  
+  # Only average columns that actually exist in the data
+  avg_cols <- intersect(avg_cols, colnames(pap_dual_raw))
+  
   pap_dual_avg <- pap_dual_raw %>%
     dplyr::group_by(sample_id, flc) %>%
     dplyr::summarise(
-      percent_area = mean(percent_area, na.rm = TRUE),
-      roi_area = mean(roi_area, na.rm = TRUE),
-      pos_area = mean(pos_area, na.rm = TRUE),
+      dplyr::across(dplyr::all_of(avg_cols), ~ mean(.x, na.rm = TRUE)),
       n_plate = dplyr::n(),
       .groups = "drop"
     ) %>%
     dplyr::arrange(sample_id, flc)
   
   out <- list(
-    raw = pap_dual_raw,
+    raw        = pap_dual_raw,
     overlap_qc = overlap_qc,
-    avg = pap_dual_avg
+    avg        = pap_dual_avg
   )
   
   if (!is.null(projectName) && assign_global) {
