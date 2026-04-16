@@ -82,8 +82,8 @@ for (i = 0; i < list.length; i++) {
 
     if (roiManager("count") == 0) {
         print("Nothing found in " + name + ", skipping...");
-        close(); wait(50); // img
-        selectImage(origID); close(); wait(50);
+        selectImage(workID); close(); wait(50);
+        selectWindow(origTitle); close(); wait(50);
         roiManager("Reset");
         run("Clear Results");
         processed++;
@@ -109,7 +109,7 @@ for (i = 0; i < list.length; i++) {
     if (best < 0) {
         print("Could not select best ROI: " + name + ", skipping...");
         selectImage(workID); close(); wait(50);
-        selectImage(origID); close(); wait(50);
+        selectWindow(origTitle); close(); wait(50);
         roiManager("Reset");
         run("Clear Results");
         processed++;
@@ -125,14 +125,15 @@ for (i = 0; i < list.length; i++) {
     if (bestArea > maxAreaFrac * imgArea) {
         print("Threshold likely failed (ROI too large) for " + name + ", skipping...");
         selectImage(workID); close(); wait(50);
-        selectImage(origID); close(); wait(50);
+        selectWindow(origTitle); close(); wait(50);
         roiManager("Reset");
         run("Clear Results");
         processed++;
         continue;
     }
 
-    selectImage(origID);
+    // ---- switch to ORIGINAL image by title (GUI-mode reliable) ----
+    selectWindow(origTitle);
     x2 = maxOf(0, x - pad);
     y2 = maxOf(0, y - pad);
     w2 = minOf(getWidth()  - x2, w + 2 * pad);
@@ -141,10 +142,23 @@ for (i = 0; i < list.length; i++) {
     makeRectangle(x2, y2, w2, h2);
     run("Crop");
 
+    // ---- defensive check: make sure we're saving the ORIGINAL, not the mask ----
+    selectWindow(origTitle);
+    if (bitDepth() == 8 && is("binary")) {
+        print("ERROR: About to save binary mask as crop for " + name + " — skipping save.");
+        selectImage(workID); close(); wait(50);
+        selectWindow(origTitle); close(); wait(50);
+        roiManager("Reset");
+        run("Clear Results");
+        processed++;
+        continue;
+    }
+
     base = stripExtensions(name);
     saveAs("PNG", outDir + base + "_crop.png");
 
-    close(); wait(50); // cropped original
+    // saveAs renames the active window; close it by current-activity
+    close(); wait(50);
     selectImage(workID); close(); wait(50);
 
     roiManager("Reset");
