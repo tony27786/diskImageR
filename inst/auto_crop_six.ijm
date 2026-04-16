@@ -1,5 +1,6 @@
 // Auto-crop 6-well plate from black background
-// Uses auto_crop.ijm-style automation, but keeps 6-well plate detection logic
+// Strategy: rotate the image upright first, then apply the original bbox+pad crop.
+// Tilt is detected via fit-ellipse angle on the initial mask.
 
 args = split(getArgument(), "*");
 if (args.length < 2) {
@@ -20,6 +21,25 @@ function stripExtensions(s) {
     return substring(s, 0, dot);
 }
 
+// Pick the largest ROI in the ROI Manager; return its index, or -1 if empty.
+function pickLargestROI() {
+    run("Set Measurements...", "area redirect=None decimal=3");
+    run("Clear Results");
+    bestIdx = -1;
+    bestA   = -1;
+    n = roiManager("count");
+    for (r = 0; r < n; r++) {
+        roiManager("Select", r);
+        run("Measure");
+        a = getResult("Area", nResults - 1);
+        if (a > bestA) {
+            bestA = a;
+            bestIdx = r;
+        }
+    }
+    return bestIdx;
+}
+
 // ---- tunable parameters ----
 rolling     = 450;
 blurSigma   = 3;
@@ -27,6 +47,7 @@ pad         = 30;
 thrMethod   = "Otsu";
 minSize     = 5000;
 maxAreaFrac = 0.90;
+rotateThreshDeg = 0.6;   // skip rotation if tilt is smaller than this
 // ----------------------------
 
 list = getFileList(inputDir);
@@ -74,8 +95,9 @@ for (i = 0; i < list.length; i++) {
     run("Convert to Mask");
     run("Fill Holes");
 
-    // Keep the 6-well plate detection logic:
-    // detect large bright object without circularity restriction
+    // ==========================================================
+    // Step 1: initial detection to measure tilt
+    // ==========================================================
     roiManager("Reset");
     run("Clear Results");
     run("Analyze Particles...", "size=" + minSize + "-Infinity pixel show=Nothing clear clear add");
@@ -90,22 +112,7 @@ for (i = 0; i < list.length; i++) {
         continue;
     }
 
-    run("Set Measurements...", "area redirect=None decimal=3");
-    run("Clear Results");
-
-    best = -1;
-    bestArea = -1;
-
-    for (r = 0; r < roiManager("count"); r++) {
-        roiManager("Select", r);
-        run("Measure");
-        a = getResult("Area", nResults - 1);
-        if (a > bestArea) {
-            bestArea = a;
-            best = r;
-        }
-    }
-
+    best = pickLargestROI();
     if (best < 0) {
         print("Could not select best ROI: " + name + ", skipping...");
         selectImage(workID); close(); wait(50);
@@ -116,12 +123,92 @@ for (i = 0; i < list.length; i++) {
         continue;
     }
 
+    // ==========================================================
+    // Step 2: rotate original + mask upfront if tilted
+    // ==========================================================
+    run("Set Measurements...", "area fit redirect=None decimal=3");
+    run("Clear Results");
     roiManager("Select", best);
-    getSelectionBounds(x, y, w, h);
+    run("Measure");
+    angle = getResult("Angle", 0);
+
+    // Fit-ellipse angle range 0..180 -> minimal rotation in [-90, 90]
+    if (angle > 90) {
+        rotDeg = angle - 180;
+    } else {
+        rotDeg = angle;
+    }
+
+    if (abs(rotDeg) >= rotateThreshDeg) {
+        print("  Board tilt = " + d2s(angle, 2) + " deg, counter-rotating by " + d2s(rotDeg, 2) + " deg");
+
+        selectWindow(origTitle);
+        run("Rotate... ", "angle=" + rotDeg + " grid=1 interpolation=Bilinear enlarge");
+
+        selectImage(workID);
+        run("Rotate... ", "angle=" + rotDeg + " grid=1 interpolation=None enlarge");
+
+        // Re-detect board ROI on the rotated mask (coordinates have changed)
+        roiManager("Reset");
+        run("Clear Results");
+        run("Analyze Particles...", "size=" + minSize + "-Infinity pixel show=Nothing clear clear add");
+
+        if (roiManager("count") == 0) {
+            print("Re-detection failed after rotation: " + name + ", skipping...");
+            selectImage(workID); close(); wait(50);
+            selectWindow(origTitle); close(); wait(50);
+            roiManager("Reset");
+            run("Clear Results");
+            processed++;
+            continue;
+        }
+
+        best = pickLargestROI();
+        if (best < 0) {
+            print("No ROI after rotation re-detection: " + name + ", skipping...");
+            selectImage(workID); close(); wait(50);
+            selectWindow(origTitle); close(); wait(50);
+            roiManager("Reset");
+            run("Clear Results");
+            processed++;
+            continue;
+        }
+    } else {
+        print("  Board tilt = " + d2s(angle, 2) + " deg, no rotation needed");
+    }
+    // Pad canvas so bbox + pad never clips
+    selectWindow(origTitle);
+    curW = getWidth();
+    curH = getHeight();
+    run("Canvas Size...", "width=" + (curW + 2*pad) + " height=" + (curH + 2*pad) + " position=Center zero");
 
     selectImage(workID);
-    imgArea = getWidth() * getHeight();
+    run("Canvas Size...", "width=" + (curW + 2*pad) + " height=" + (curH + 2*pad) + " position=Center zero");
 
+    // Re-detect on padded mask (board coords shifted by +pad, +pad)
+    roiManager("Reset");
+    run("Clear Results");
+    run("Analyze Particles...", "size=" + minSize + "-Infinity pixel show=Nothing clear clear add");
+    if (roiManager("count") == 0) {
+        print("ROI lost after canvas pad: " + name + ", skipping...");
+        selectImage(workID); close(); wait(50);
+        selectWindow(origTitle); close(); wait(50);
+        roiManager("Reset"); run("Clear Results");
+        processed++;
+        continue;
+    }
+    best = pickLargestROI();
+
+    // ==========================================================
+    // Step 3: sanity check on ROI size
+    // ==========================================================
+    selectImage(workID);
+    imgArea = getWidth() * getHeight();
+    roiManager("Select", best);
+    run("Set Measurements...", "area redirect=None decimal=3");
+    run("Clear Results");
+    run("Measure");
+    bestArea = getResult("Area", 0);
     if (bestArea > maxAreaFrac * imgArea) {
         print("Threshold likely failed (ROI too large) for " + name + ", skipping...");
         selectImage(workID); close(); wait(50);
@@ -132,7 +219,12 @@ for (i = 0; i < list.length; i++) {
         continue;
     }
 
-    // ---- switch to ORIGINAL image by title (GUI-mode reliable) ----
+    // ==========================================================
+    // Step 4: original bbox + pad crop logic (unchanged)
+    // ==========================================================
+    roiManager("Select", best);
+    getSelectionBounds(x, y, w, h);
+
     selectWindow(origTitle);
     x2 = maxOf(0, x - pad);
     y2 = maxOf(0, y - pad);
@@ -142,10 +234,10 @@ for (i = 0; i < list.length; i++) {
     makeRectangle(x2, y2, w2, h2);
     run("Crop");
 
-    // ---- defensive check: make sure we're saving the ORIGINAL, not the mask ----
+    // Defensive: make sure we're saving the ORIGINAL, not the mask
     selectWindow(origTitle);
     if (bitDepth() == 8 && is("binary")) {
-        print("ERROR: About to save binary mask as crop for " + name + " — skipping save.");
+        print("ERROR: About to save binary mask as crop for " + name + " - skipping save.");
         selectImage(workID); close(); wait(50);
         selectWindow(origTitle); close(); wait(50);
         roiManager("Reset");
@@ -157,7 +249,7 @@ for (i = 0; i < list.length; i++) {
     base = stripExtensions(name);
     saveAs("PNG", outDir + base + "_crop.png");
 
-    // saveAs renames the active window; close it by current-activity
+    // saveAs renames the active window; close by current-activity
     close(); wait(50);
     selectImage(workID); close(); wait(50);
 
