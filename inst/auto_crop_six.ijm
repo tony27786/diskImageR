@@ -41,7 +41,7 @@ for (i = 0; i < list.length; i++) {
     }
 }
 print("Total image files: " + total);
-setBatchMode(true);
+setBatchMode(false);
 
 for (i = 0; i < list.length; i++) {
     name = list[i];
