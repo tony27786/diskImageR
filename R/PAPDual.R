@@ -213,8 +213,8 @@ PAPDual <- function(inputDir = NULL,
       image_raw  = as.character(image),
       image_base = stringr::str_remove(image_raw, "\\.[A-Za-z0-9]+$"),
       image_base = stringr::str_remove(image_base, "_crop$"),
-      sample_id  = stringr::str_extract(image_base, "^[0-9]+"),
-      plate      = stringr::str_extract(image_base, "[HL]$")
+      plate      = stringr::str_extract(image_base, "[HL]$"),
+      sample_id  = stringr::str_remove(image_base, "[HL]$")
     )
   
   # check file names
