@@ -216,6 +216,13 @@ PAPDual <- function(inputDir = NULL,
       plate      = stringr::str_extract(image_base, "[HL]$"),
       sample_id  = stringr::str_remove(image_base, "[HL]$")
     )
+  # drop non-H/L images (e.g. blank reference plates) before validation
+  not_plate <- is.na(pap_annot$plate) | !pap_annot$plate %in% c("H", "L")
+  if (any(not_plate)) {
+    message("Ignoring non-H/L images (not sample plates): ",
+            paste(unique(pap_annot$image_raw[not_plate]), collapse = ", "))
+    pap_annot <- pap_annot[!not_plate, , drop = FALSE]
+  }
   
   # check file names
   if (any(is.na(pap_annot$sample_id) | pap_annot$sample_id == "")) {
