@@ -1,6 +1,6 @@
 Package: diskImageR
 Title: Customized Pipeline to Analyze Resistance and Tolerance from Drug Disk Diffusion Assays
-Version: 1.1.0.9052
+Version: 1.1.0.9058
 Authors@R: c(
     person("Aleeza", "Gerstein", email = "aleeza.gerstein@umanitoba.ca", role = "aut"),
     person("Sonja", "Friesen", email = "fries382@myumanitoba.ca", role = "aut"),
@@ -17,6 +17,6 @@ SystemRequirements: ImageJ (all OS), Xcode (Mac)
 License: GPL-3
 Imports: zoo, subplex, tcltk, methods
 Suggests: knitr
-RoxygenNote: 7.3.3
 Encoding: UTF-8
 NeedsCompilation: no
+Config/roxygen2/version: 8.0.0
