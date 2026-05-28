@@ -16,7 +16,9 @@ PAPDual(
   return_mode = c("all", "avg"),
   assign_global = TRUE,
   run_macro = TRUE,
-  normalize = TRUE,
+  normalization = c("highest", "0", "000blank"),
+  blank_pattern = "^000blank",
+  blank_mode = c("global", "per_well"),
   blank_csv = NULL
 )
 }
@@ -28,50 +30,55 @@ if an existing CSV file is used.}
 \item{projectDir}{Character scalar. Directory used to store or read PAPArea
 results.}
 
-\item{projectName}{Optional character scalar. Name of the object to create in
-the global environment when \code{assign_global = TRUE}.}
+\item{projectName}{Optional character scalar. Name of the object to create
+in the global environment when \code{assign_global = TRUE}.}
 
 \item{roiZip}{Optional character scalar. Path to the ROI zip file used by
 \code{PAPArea()}.}
 
-\item{wellOrder}{Character vector specifying the expected order of wells for
-PAP step assignment. Defaults to
-\code{c("TL", "TM", "TR", "BL", "BM", "BR")}.}
+\item{wellOrder}{Character vector specifying the expected order of wells.
+Defaults to \code{c("TL", "TM", "TR", "BL", "BM", "BR")}.}
 
-\item{imageJLoc}{Character scalar. Path to the ImageJ/Fiji executable.
-Passed to \code{PAPArea()}. Defaults to \code{NA}.}
+\item{imageJLoc}{Character scalar. Path to the ImageJ/Fiji executable.}
 
-\item{overwrite}{Logical. Whether existing outputs should be overwritten when
-running \code{PAPArea()}.}
+\item{overwrite}{Logical. Whether existing outputs should be overwritten.}
 
 \item{debug}{Logical. Whether to print additional debugging information.}
 
 \item{return_mode}{Character scalar. Either \code{"all"} or \code{"avg"}.}
 
-\item{assign_global}{Logical. Whether to assign the returned object into the
-global environment when \code{projectName} is not \code{NULL}.}
+\item{assign_global}{Logical. Whether to assign the returned object into
+the global environment when \code{projectName} is not \code{NULL}.}
 
-\item{run_macro}{Logical. If \code{TRUE}, run \code{PAPArea()} first. If
-\code{FALSE}, skip macro execution and directly read an existing CSV.}
+\item{run_macro}{Logical. If \code{TRUE}, run \code{PAPArea()} first.}
 
-\item{normalize}{Logical. If \code{TRUE} (default), perform 128-well
-normalization using the H-plate BR well as per-sample internal zero.}
+\item{normalization}{Character scalar. One of \code{"highest"} (default),
+\code{"0"}, or \code{"000blank"}. See Details.}
 
-\item{blank_csv}{Optional character scalar. Path to a blank-plate
-\code{pap_feature_results.csv} for per-well-position illumination correction.
-If \code{NULL} (default), blank correction is skipped.}
+\item{blank_pattern}{Character scalar (regex). Pattern matched against
+\code{image_base} to auto-detect a blank-plate image in the input folder.
+Defaults to \code{"^000blank"}. Only used when
+\code{normalization = "000blank"}.}
+
+\item{blank_mode}{Character scalar. Either \code{"global"} (default; 6-well
+mean of the blank as a single offset) or \code{"per_well"} (per-position
+offset). Only used when \code{normalization = "000blank"}.}
+
+\item{blank_csv}{Optional character scalar. Path to an external blank-plate
+\code{pap_feature_results.csv}. If provided and
+\code{normalization = "000blank"}, overrides any auto-detected in-folder
+blank.}
 }
 \value{
 If \code{return_mode = "all"}, a named list with three elements:
 \describe{
-  \item{raw}{Annotated per-image, per-well results with normalization columns.}
+  \item{raw}{Annotated per-image, per-well results with \code{norm_*} columns.}
   \item{overlap_qc}{Comparison of duplicated concentrations (0 and 8 ug/mL)
-  between H and L plates.}
+  between H and L plates, using \code{norm_mean}.}
   \item{avg}{Averaged summary per sample-by-concentration.}
 }
 
-If \code{return_mode = "avg"}, only the averaged summary data frame is
-returned.
+If \code{return_mode = "avg"}, only the averaged summary data frame.
 }
 \description{
 \code{PAPDual()} is a wrapper around \code{PAPArea()} for processing
@@ -81,13 +88,14 @@ or directly reading an existing \code{pap_feature_results.csv} file from
 \code{projectDir}. The function parses sample identifiers and plate type
 (\code{H} or \code{L}) from image names, maps wells to predefined fluconazole
 concentrations, performs overlap quality control for duplicated concentrations,
-and returns both raw and averaged PAP summaries.
+applies one of three normalization modes, and returns both raw and averaged
+PAP summaries.
 }
 \details{
-The function assumes image file names follow a pattern such as
-\code{104H}, \code{104L}, or \code{104H_crop}, where:
+Image file names should follow a pattern such as \code{104H}, \code{104L},
+or \code{104H_crop}, where:
 \itemize{
-  \item the leading numeric portion is treated as the sample identifier;
+  \item the leading portion is the sample identifier;
   \item the trailing \code{H} or \code{L} indicates the plate type;
   \item an optional \code{_crop} suffix is ignored during parsing.
 }
@@ -96,65 +104,55 @@ Fluconazole concentrations are assigned according to the well position:
 
 \strong{Low plate (\code{L})}
 \itemize{
-  \item \code{TL = 0}
-  \item \code{TM = 0.5}
-  \item \code{TR = 1}
-  \item \code{BL = 2}
-  \item \code{BM = 4}
-  \item \code{BR = 8}
+  \item \code{TL = 0},  \code{TM = 0.5}, \code{TR = 1}
+  \item \code{BL = 2},  \code{BM = 4},   \code{BR = 8}
 }
 
 \strong{High plate (\code{H})}
 \itemize{
-  \item \code{TL = 0}
-  \item \code{TM = 8}
-  \item \code{TR = 16}
-  \item \code{BL = 32}
-  \item \code{BM = 64}
-  \item \code{BR = 128}
+  \item \code{TL = 0},  \code{TM = 8},   \code{TR = 16}
+  \item \code{BL = 32}, \code{BM = 64},  \code{BR = 128}
 }
 
-When \code{normalize = TRUE} (default), the H-plate BR well (128 ug/mL) is
-used as a per-sample internal zero reference. This well consistently shows
-no growth and controls for per-sample variation in agar opacity, inoculum
-density, and photography conditions. Normalized columns (\code{norm_mean},
-\code{norm_median}, \code{norm_intden}) are computed by subtracting the
-128-well baseline from the corresponding raw values.
-
-Optionally, a blank plate CSV (\code{blank_csv}) can be provided for
-additional per-well-position correction of illumination artifacts.
-
-The function generates three outputs:
+\strong{Normalization modes (\code{normalization}).} All three modes add
+\code{norm_mean}, \code{norm_median}, \code{norm_intden} columns; \code{raw_*}
+columns are never modified, so the same dataset can be re-normalized by
+rerunning with a different \code{normalization} value.
 \itemize{
-  \item \code{raw}: annotated per-image, per-well PAP results with parsed
-  sample ID, plate type, mapped FLC concentration, and normalization columns;
-  \item \code{overlap_qc}: comparison of duplicated concentrations shared
-  between plates (0 and 8 ug/mL);
-  \item \code{avg}: merged sample-by-concentration table obtained by averaging
-  duplicate concentrations across plates.
+  \item \code{"highest"} (default) — per-sample subtraction of the H-plate
+  BR well (128 ug/mL). This well consistently shows no growth and serves as
+  a per-plate agar baseline. \code{norm_*} is typically positive.
+  \item \code{"0"} — per-sample subtraction of the FLC=0 reference, computed
+  as the average of the L-plate TL and H-plate TL wells (both = 0 ug/mL).
+  Because FLC=0 is a growth maximum rather than a zero, \code{norm_*} is
+  typically negative at FLC > 0 and its magnitude reflects growth deficit
+  relative to the no-drug control.
+  \item \code{"000blank"} — per-batch subtraction of a blank-plate reference,
+  auto-detected from the input folder via \code{blank_pattern} (default
+  \code{"^000blank"}) or supplied externally via \code{blank_csv}.
+  \code{blank_mode = "global"} uses the 6-well mean (single offset for all
+  wells); \code{blank_mode = "per_well"} subtracts each well's own value
+  (captures spatial illumination differences).
 }
 }
 \examples{
 \dontrun{
-# Run macro + 128-well normalization
+# Default: highest-well (128 ug/mL) per-sample normalization
 res <- PAPDual(
   inputDir    = "path/to/images",
   projectDir  = "path/to/project",
   projectName = "pap_dual_res",
-  roiZip      = "path/to/papROISet.zip",
-  return_mode = "all"
+  roiZip      = "path/to/papROISet.zip"
 )
 
-# Read existing CSV, skip normalization
-avg_res <- PAPDual(
-  projectDir  = "path/to/project",
-  run_macro   = FALSE,
-  normalize   = FALSE,
-  return_mode = "avg"
-)
+# Compare alternatives without re-running the macro
+res_0     <- PAPDual(projectDir = "path/to/project", run_macro = FALSE,
+                     normalization = "0")
+res_blank <- PAPDual(projectDir = "path/to/project", run_macro = FALSE,
+                     normalization = "000blank")
 }
 
 }
 \seealso{
-\code{\link{PAPArea}}
+\code{\link{PAPSingle}}, \code{\link{PAPArea}}
 }
