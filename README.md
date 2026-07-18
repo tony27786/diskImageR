@@ -1,246 +1,414 @@
 ## Disclaimer
 
-This repository is a fork of https://github.com/acgerstein/diskImageR and contains fixes for multiple known issues. This fork is community-maintained and is **not** an official upstream release. Please cite the original repository if you use this work.
+This repository is a fork of [acgerstein/diskImageR](https://github.com/acgerstein/diskImageR) and contains fixes for multiple known issues. This fork is community-maintained and is **not** an official upstream release. Please cite the original repository if you use this work.
 
-This package provides a pipeline to analyze photographs of disk diffusion plates. This removes the need to analyze the plates themselves, and thus analysis can be done separate from the assay. For typical disk assays, <i>diskImageR</i> measures drug resistance as the zone of inhibition, i.e.,the radius at multiple cutoff values where growth reaches 20\%, 50\%, or 80\% of maximal growth, and measures drug tolerance as the fraction of the subpopulation that is able to grow above the resistance point ("FoG"). For counfounding growth (where the observed population growth is highest at high drug concentration and decreases to no growth at low concentrations), <i>diskImageR</i> measures the zone of disinhibition as the point where growth is reduced by 20\%, 50\%, or 80\% below the maximal growth. For paradoxical growth, where high growth is observed at both high and low drug concentrations but decreases at intermediate concentration, <i> diskImageR</i> measures the radius of maximum inhibition, i.e., the point where the least amount of growth is observed. 
+**Documentation notice:** Due to time constraints, this README was written with the assistance of generative AI. A detailed, manually reviewed and corrected version will be provided later.
 
-## Installing
+# diskImageR
 
-For the latest version, can be installed from GitHub using [devtools] (http://github.com/hadley/devtools)
+`diskImageR` is an R package for image-based analysis of antimicrobial-response assays. This fork currently supports two related workflows:
+
+1. the original disk diffusion workflow, including typical, confounding, and paradoxical growth analysis; and
+2. a six-well PAP workflow for Fiji/ImageJ feature extraction, fluconazole (FLC) concentration mapping, normalization, and quality control.
+
+The current PAP layer produces grayscale/texture gradients and normalized summary tables. It does not automatically calculate a classic PAP area under the curve (AUC) or assign a heteroresistance category.
+
+This README reflects package version **1.1.0.9066**. The PAP implementation in the package source and function help pages should be treated as the reference until the planned manual review of this README is complete.
+
+## What has been updated
+
+The current PAP workflow is substantially different from the earlier area-threshold implementation.
+
+| Area | Current behavior |
+| --- | --- |
+| PAP macro output | The output file is now `pap_feature_results.csv`; the older `pap_area_results.csv` format is no longer read by the PAP wrappers. |
+| Feature extraction | `PAPArea()` records pre-CLAHE absolute grayscale features and post-CLAHE intensity, variability, and dark-pixel features for each of six wells. |
+| Quality control | The Fiji macro writes one ROI overlay image per input image to `projectDir/qc/`. The old binary-mask output directory is no longer produced. |
+| Single-plate processing | `PAPSingle()` maps a six-well plate to FLC concentrations `0, 8, 12, 16, 24, 32` µg/mL and supports no-drug or blank-plate normalization. |
+| Dual-plate processing | `PAPDual()` combines paired low- and high-concentration plates, maps a unified `0–128` µg/mL gradient, and reports overlap QC at `0` and `8` µg/mL. |
+| Normalization | Raw measurements are preserved. New `norm_mean`, `norm_median`, and `norm_intden` columns are added using the selected reference. |
+| Blank plates | A blank can be detected in the image batch with a filename pattern (default: `^000blank`) or supplied as an external feature CSV. Global and per-well subtraction are available. |
+| Batch reliability | The PAP macro uses unique temporary image names during batch processing to avoid alternating-image/window conflicts. |
+| Six-well preparation | `AutoCrop(..., plate = "six")` uses the six-well crop macro, including tilt detection and automatic rotation before cropping. |
+
+### Migration note
+
+The previous PAP fields `pos_area` and `percent_area` have been replaced by grayscale features. Existing projects that contain only `pap_area_results.csv` must be reprocessed with the current `PAPArea()`/Fiji macro before they can be used with `PAPSingle()` or `PAPDual()`.
+
+For `PAPDual()`, the older logical `normalize` argument has been replaced by the character-valued `normalization` argument documented below. The `wellOrder` argument controls `pap_step`/`pap_index` ordering only; it does not change the fixed FLC mappings used by `PAPSingle()` or `PAPDual()`.
+
+## Installation
+
+Install the current fork from GitHub:
 
 ```r
-#install.packages("devtools")
+install.packages(c("devtools", "dplyr", "stringr", "tidyr"))
 devtools::install_github("tony27786/diskImageR")
 ```
 
-## Vignette
-
-Since `diskImageR` requires third-party software (ImageJ), it was not possible to include the vignette in the package in the usual way. This readme file aims to cover some of the information that is present in the vignette, but the user is encouraged to download a pdf of the full vignette (i.e., help file) [here] (https://www.microstatslab.ca/uploads/2/3/5/6/23564534/diskimager_vignette_v4.pdf). 
-
-## Required software
-
-The first step of `diskImageR` analyzes the disk diffusion photographs in ImageJ, a free, public domain image processing program available for download (http://rsb.info.nih.gov/ij/download.html). On a Mac, if you do not already have Xcode you will need to download it from the Apple Developer tools (https://developer.apple.com/xcode/download/). You may be prompted to download and install other additional programs in the R console if any are required (depends on what is already on your computer). 
-
-## Function overview (in the typical order of use)
-
-* `IJMacro`: runs an ImageJ macro on the folder that contains the photograph to be analyzed [required]
-* `readInExistingIJ`: used to read in existing ImageJ analyses [optional]
-* `plotRaw`: used to plot the results of ImageJ analysis [optional]
-* `maxLik`: maxmimum likelihood inference to fit logistic models to the data [required]
-* `saveMLParam`: save the output of maximum likelihood analysis [optional]
-* `createDataframe`: dataframe creation of all parameter estimates [required]
-* `addType`: add a factor column to parameter estimate dataframe [optional]
-* `aggregateData`: averages data from photographs of the same strain & type [optional]
-* `calcMIC`: calculate the MIC from RAD values [optional]
-* `readExistingDF`: read in an existing dataframe using a pop-up box [optional]
-* `oneParamPlot`: plot a single resistance or tolerance parameter [optional]
-* `twoParamplot`: plot resistance (RAD) and tolerance (FoG) at a specified cutoff value [optional]
-* `threeParamplot`: plot resistance (RAD), tolerance (FoG), and sensitivity (slope) [optional]
-
-### Prepare plates and photographs
-The analysis done by `diskImageR` will only be as good as the photographs taken of the disk assay plates. We use the Bencher Copymate II camera mounting system. In this setup there are two fluorescent lights on either side of the disk, oriented to minimize shadows on the plate in an otherwise dark room. We use the Canon Rebel T3i camera with an ISO 800, white balance "white fluorescent light", time 1/100s, picture stype "neutral", centre focused. Any camera of reasonably high quality should suffice, though the camera should always be set in manual rather than automatic mode, as the goal is to take photographs as consistently as possible. We also use the 2s timer to avoid potentially jostling the camera while taking images and/or having a hand/arm shadow in the picture. Plates should be photographed on a dark surface (we use black velvet) and plate labels are written on the side rather than the bottom of the plate. 
-
-Prior to analysis, images should be cropped close to the plate (as above). Because the analysis program automatically detects the disk based on size, it is important that no other similar-sized circles be present in the image (e.g., from letters in labels).
-
-Once you have the set of photographs that you want to be analyzed together they should be placed in the same directory, with nothing else inside that directory. 
-<b>Important!</b> If there are any other files within the directory the script will not run properly.
-
-The photograph file naming scheme will be be carried throughout, thus care should be taken with naming photographs in a logical manner. The general format that we use is "strain_factor1_factor2_rep.jpg". This format will allow you to use a built-in function to average across replicate pictures from the same strain. Conversely, if you intend to do this separately (or not at all) the photographs can be named anything. 
-
-###Run the ImageJ macro on the set of photographs
-The first function of the package is `IJMacro()`. From each photograph, an ImageJ macro that is included in `diskImageR` will automatically open each photograph from the specified directory, determine where the disk is located on the plate, find the center of the disk, and draw 40mm radial lines out from the center of the disk every 5 degrees. For each line, the pixel intensity will be determined at many points along the line using the built-in `plot profile` macro from ImageJ. This data will be stored in the folder *ImageJ_out* on your computer, with one file for each photograph.
-
-`IJMacro()` can be run in two different ways, either through a user-interface with pop-up boxes, or directly through the R console. At this point you will specify a project name, the main project directory, and the photograph directory.
-The project name should ideally be fairly short (easy to type without typos!) and specific to the project. It must start with a letter, not a number or special character, but can otherwise be anything. The project name must always be specified with quotation marks around it (a surprisingly common error). Otherwise there will be a red error message (like <span style="color:red">Error in IJMacro(newProject) : object 'newProject' not found</span>).
-The main project directory is the place where all files generated by the package will be saved within three directories: <i>ImageJ_out</i>, <i>parameter_files</i> and <i>figures</i>. A sub-directory will be created within each of these directories with the project name for organizational purposes, so that multiple different experiments/sets of analyses can be easily conducted from the same main project directory.
-The photograph directory is the one used to store photographs from above (which has nothing except the photographs to be analyzed in it). 
-
-<b> Important! </b> There can not be any spaces or special characters in any of the folder names that are in the path that lead to either the main project directory or the photograph directory. If there are an error box titled "Macro Error" will pop up and the script will not run (the red error message <span style="color:red">Error in tList[[i]]: subscript out of bounds</span> will also show up in the R console). 
-
-The default assumption here and in all funtions is that the disk size is the standard 6mm. If you are using custom-sized disks you will need to specify that with the argument `diskDiam = X`, where X is the size of your disk in mm. This should also be specified in the functions `plotRaw()`, `maxLik()` and `createDataframe()`, discussed below. You will also need to change the argument `standardLoc` in `maxLik()` and `createDataframe()`. standardLoc is a numberic value that indicates the location (on the disk) to use to standardize intensity across photographs. The position of standardLoc is a position that should theoretically have the same intensity in all photographs, i.e., the white of the disk. The defaul value (2.5mm) was chosen after testing of 6mm disks that contain some writing. If smaller disks are used standardLoc should be scaled appropriately. You can see where standardLoc falls in each photograph in `plotRaw()` (the red dashed line when `plotStandardLoc = TRUE`). To suppress this standardization use `standardLoc = FALSE`.
-
-To run the ImageJ macro through a user-interface with pop-up boxes: 
-```r
-IJMacro("newProject")
-```
-
-If you would prefer to avoid pop-up boxes you can directly specify the main project and photograph directory locations:
-```r
-IJMacro("newProject", projectDir= "/path/to/projectDir", photoDir = "/path/to/projectDir/photographs/")
-```
-
-If `IJMacro()` is unable to locate ImageJ a red error will pop-up with a message like <span style="color:red">/bin/sh: /Applications/ImageJ/ImageJ.app/Contents/MacOS/JavaApplicationStub: No such file or directory</span>. The easiest solution is to move ImageJ to the default location or to specify the path to ImageJ with argument `ImageJLoc = "/path/to/ImageJ"`. 
-
-<b> Important! </b> `IJMacro()` must run completely, without error, for everything downstream. In our experience this is the most likely step for errors to occur. Errors will be indicated in the R console should they arise, and will hopefully give you clues as to what the problem is if they are different than those described above. 
-
-After `IJMacro()` has run successfully the output of the ImageJ analysis can be found in the *ImageJ_out* directory, though this is probably not particularly helpful unless you want to see the intensity calculations from each line. The information about the average line from each photograph can be found in the "averageLines.csv" file located in the *parameter_out* folder. This is the information that is used for all further analysis within `diskImageR` and may be useful for other purposes.
-
-To access the output of the ImageJ analysis in a later R session use the function `readInExistingIJ()` (e.g., if you ran `IJMacro()` on a separate day then you want to conduct the downstream analyses). At this step you can also change the project name, you do not have to specify the same name that was used originally. If the name is changed new subdirectory folders will be created within the main project directory. This function will bring up a pop-up box to select the main project folder and select the directory that contains the existing ImageJ output files.
+Then load the package. The current `PAPSingle()` and `PAPDual()` implementations use the pipe supplied by `dplyr`, so attach `dplyr` before using either wrapper.
 
 ```r
-readInExistingIJ("betterName") 
+library(dplyr)
+library(diskImageR)
 ```
 
-###Plot the output of ImageJ analysis
-The optional function `plotRaw()` will create a PDF file of plots saved to the *figures* directory that show the average pixel intensity across all 72 lines from each photograph (i.e., the data that can be found in the "averageLines.csv" file). This function is a good check to see whether the analysis proceeded properly and in and of itself may be useful to visualize differences between different strains or experimental factors.
+The package declares R `>= 3.0.3`. PAP processing also checks for `dplyr`, `stringr`, and `tidyr` at runtime.
 
-```{r, fig.width=6, fig.height=4}
-plotRaw("newProject", showNum = TRUE, popUp = FALSE, savePDF = FALSE)
+## Required external software
+
+Fiji/ImageJ is required for image processing. **Fiji is recommended for the PAP workflow** because the bundled `pap.ijm` macro calls the CLAHE command (`Enhance Local Contrast`).
+
+If Fiji/ImageJ is installed in a standard macOS location, the package will try to locate it automatically. Otherwise, pass the application directory explicitly, for example:
+
+```r
+imageJLoc <- "/Applications/Fiji.app"
 ```
 
-Many different arguments can be specified to influence the plots and the PDF that is generated, including the minimum and maximum x and y values (`xmin`, `xmax`, `ymin`, `ymax`), the number of plots in each row (`xplots`), the height and width of the PDF file (`height`, `width`), the point size (`cexPt`), and the size of the x- and y-axis font (`cexX`, `cexY`). As with all functions, you can type `?plotRaw` into the R console for all options and to see default values.
+On Windows, `imageJLoc` should be the directory containing `ImageJ.exe`. The current automatic launcher code is primarily set up for macOS and Windows.
 
-###Run the maximum likelihood analysis 
-If all of your images to analyze are of typical disk assays, <i>diskImageR</i> should be on the default mode, which is the version that was  available on CRAN from 2015-2023. If your folder contains any atypical images, as of August 2023 <i>diskImageR</i> is able to run in atypical mode, by setting the argument "typical = FALSE" within the functions `maxLik()`,`saveMLParam()`, and `createDataframe()`, as described at the end of this document. 
+## PAP workflow
 
-For typical photographs:
-The next step is the function `maxLik()`, which uses maximum likelihood to find the logistic and double logistic equations that best describe the shape of the ImageJ output data. Our primary goal in curve fitting is to capture an underlying equation that fits the observed data. These data follow a characteristic "S-shape" curve, so the standard logistic equation is used where asym is the asymptote, od50 is the midpoint, and scal is the slope at od50 divided by asym/4. The midpoint from the single logistic is used to determine sensitivity.
+### 1. Prepare the images
 
-We often observed disk assays that deviated from the single logistic, either rising more linearly than expected at low cell density, or with an intermediate asymptote around the midpoint. To fascilitate fitting these curves, we also fit a double logistic, which allows greater flexibility. In practice, as the double logistic has extra parameters, it will always provide a closer fit to the underlying data, thus the results of this model are used to determine the resistance and tolerance parameters. 
+The bundled PAP ROI template contains exactly six ROIs in this spatial order:
 
-Depending on the number of photographs to be analyzed, `maxLik()` can take a fair amount of time, upwards of an hour or more. This is due to the maximum likelihood fitting procedures, which determine the best fit parameters from multiple different starting values. The status is indicated by a series of dots (".") in the R console, with one dot per photograph. This procedure is the find.mle routine from the <a href="https://github.com/richfitz/diversitree">diversitree</a> package written by Richard Fitzjohn. If for some reason the procedure gets halted in the middle of `maxLik()` (e.g., computer is shut down) as long as R remains open it should resume where it left off when the computer is reactivated.
+| Index | Well | Position |
+| ---: | :---: | --- |
+| 1 | `TL` | top left |
+| 2 | `TM` | top middle |
+| 3 | `TR` | top right |
+| 4 | `BL` | bottom left |
+| 5 | `BM` | bottom middle |
+| 6 | `BR` | bottom right |
 
-From these functions the plate background intensity is substracted off the intensity from all values; this should be common across all pictures taken at the same time. If you are using plates with different coloured base medium their photographs should be analzyed separately, as there will be a different background intensity from different plates. The background intensity is determined from the observed pixel intensity right beside the disk on a plate where there are no colonies in this area (e.g., the photograph on the left above). This must be specified by the user through the argument `clearHalo = X`, where X is the numbered location of the appropriate photograph. Photographs are always analyzed and organized in alphabetical order; the order can be determined by typing `names(newProject)` (no quotation marks around the project name) in the R console. In our experiments we tend to have at least one appropriate photograph with a clear halo beside the disk. A good practice, however, would be to always take a photograph of a blank plate with just the disk in the center to use for this purpose (and save it with a name like "a" so that it is always the first photograph in the list (i.e., `clearHalo = 1`). The (non)results from this photograph can be removed in the function `createDataframe()` below.
+Keep plate placement, image scale, and cropping consistent with the ROI template. The macro accepts lowercase `.jpg`, `.jpeg`, `.png`, `.tif`, and `.tiff` extensions. Uppercase extensions are not currently detected.
 
-The output of `maxLik()` is a list that is saved to the R environment and a PDF file with one plot per photograph that shows the results of the model fitting (saved to the *figures* directory). Many aspects of this figure can be specified including the maximum y axis (`ymax`) the number of plots on the x axis (`xplots`), the height and width of the PDF file (`height`, `width`), the values of RAD to be plotted (one of `80`, `50`, `20`, or `all`) and FoG cutoff value to plot (one of `80`, `50`, or `20`). Once `maxLik()` has been run once (in a given R session), it does not need to be rerun to made adjustments to the PDF file; to make a new figure use the argument `needML = FALSE`. The default is to save only a single PDF file (i.e., to repeatedly overwrite the same file with different figure iterations), this can be supressed with the argument `overwrite = FALSE`. 
+The default `papROISet.zip` is bundled with the package. Only pass `roiZip` when using a deliberately customized six-ROI template.
 
-```{r,  fig.width=5, fig.height=4, tidy=TRUE}
-maxLik("newProject", clearHalo=1, RAD="all", FoG=20, needML=TRUE, overwrite = TRUE, popUp = FALSE, savePDF = FALSE, typical = TRUE )
+Optional six-well auto-cropping:
+
+```r
+raw_dir     <- "/path/to/raw_images"
+cropped_dir <- "/path/to/cropped_images"
+
+AutoCrop(
+  photoDir  = raw_dir,
+  outputDir = cropped_dir,
+  plate     = "six",
+  imageJLoc = "/Applications/Fiji.app"
+)
 ```
 
-<b>[OPTIONAL] Save the maximum likelihood results</b>
-If you are intersted in the nuts and bolts of the maximum likelihood parameters it is possible to save these results using the `saveMLParam()` function, which will save a CSV file into the *paramter_files* directory that contains parameter estimates for asym, od50, scal and sigma, as well as the log likelihood of the single and double logistic models.
- 
-```
-saveMLParam("newProject")
-```
+The six-well crop macro saves PNG files with an `_crop` suffix. Both PAP wrappers remove that suffix when constructing sample identifiers.
 
-For atypical photographs:
-New parameters are available for quantification of observed photographs that follow either a confounding or paradoxical pattern of drug response (see images at the top of the vignette). To use this analysis, everything remains the same as described above until after `IJMacro()` has been run. 
+### 2. Extract PAP features with `PAPArea()`
 
-The following steps are then different: 
+Use `PAPArea()` when you need the per-image, per-well measurements without a fixed FLC mapping:
 
-| 1. `maxLik()`: To use `maxLik()` to analyze atypical photographs, use the argument `typical = FALSE`. When `typical = FALSE`, `maxLik()` considers three types of drug responses, and will automatically choose the one with the best fit for each individual photograph. 
+```r
+pap_features <- PAPArea(
+  inputDir   = cropped_dir,
+  projectDir = "/path/to/pap_feature_output",
+  imageJLoc  = "/Applications/Fiji.app"
+)
 
-<b>NOTE:</b> The photographs do not have to be manually separated, `maxLik()` can be run on a folder containing photographs of multiple types of drug responses. 
-
-The following curves are fit to the average line from each photograph (determined through `IJMacro()`:
-<b>Typical growth </b> -- to test for typical growth (high growth only at low drug concentration), the double logistic equation is fit, as described above.
-<b>Confounding growth </b> -- to test for confounding growth (high growth only at high drug concentrations), a negative logistic equation is fit, where <i>asym</i> is the asymptote, <i>od50</i> is the midpoint, and <i>scal</i> is the slope at <i>od50</i> divided by <i>asym</i>/4.
-<b>Paradoxical growth </b> -- to test for paradoxical growth (high growth at both high and low drug concentration), a logistic differential equation is fit. The parameters of this equation are the same as in the logistic, as well as <i>drop</i>,the change between min and max values, <i>slope</i>, the slope of the <i>drop</i>, <i>shift</i>, the movement left/right, and <i>height</i>,the movement up/down.
-
-2. `saveMLParam()`: when `maxLik()` is run with `typical = TRUE`, it will create two lists with maximum likelihood parameters, one with single logistic parameters (named ML) and one with double logistic parameters (named ML2). However, when `maxLik()` is run with `typical = FALSE`, it will only create one list, named ML2 which includes parameter estimates for <i>asym</i>, <i>od50</i>, <i>scal</i> and <i>sigma</i>, log likelihood of logistic, negative logistic or differentiated logistic models and also <i>type</i> of each equation. The function `saveMLparam()` is updated to be able to handle this discrepancy and save maximum likelihood parameters in either case without error.
-
-
- 
-###Create and save a dataframe of parameter estimates
-The last required step is to run the function `createDataframe()` to create and save a dataframe with the drug response parameter estimates. Note if `maxLik()` is run with `typical = FALSE`, you must also run `createDataframe()` with `typical = FALSE`. `createDataframe()` will categorize the photos based on their type (typical, confounding, or paradoxical). A dataframe with the relevant parameters will be created for each category that has photos. 
-
-For typical growth, the parameters are:
-* <i>RAD80</i>, <i>RAD50</i>, <i>RAD20</i>: calculated by asking what x value (distance in mm) corresponds to the point where 80\%, 50\% and 20\% reduction in growth occurred (i.e., the <u>RAD</u>ius of inhibition).
-* <i>FoG80</i>, <i>FoG50</i>, <i>FoG20</i>: the `rollmean()` function from the `zoo` package is used to calculate the area under the curve from the disk edge to each RAD cutoff value. This achieved growth is then compared to the potential growth, i.e., the area of a rectangle with length and height equal to RAD. The calculated parameters are thus the <u>F</u>raction <u>O</u>f full <u>G</u>rowth in this region (<i>FoG80</i>, <i>FoG50</i>, <i>FoG20</i>). 
-
-For confounding growth, the parameters are:
-* <i>DRAD80</i>, <i>DRAD50</i>, <i>DRAD20</i>: calculated by asking what x value corresponds to the point where 80\%, 50\% and 20\% of maximum growth occurred (<u>D</u>isinhibition <u>RAD</u>ius).
-
-For paradoxical growth, the parameters are:
-* <i>CMI</i>: calculated from the <u>C</u>urve determined in `maxLik()`, the point of <u>MI</u>nimum growth from.
-* <i>OMI</i>: calculated from the <u>O</u>bserved average data, the point of <u>MI,</u>nimum growth.
-    
-A different dataframe will be created individually for each type of growth that is observed in the data set, i.e., up to three dataframe. Each dataframe is written to a CSV file in the *parameter_files* directory, named either '_df.csv', '_confound_df.csv' or `_para_df.csv, as well as saved to the global environment. 
-using the best fit parameters from the logistic equations:
-
-If you have included a blank photograph to use for the background subtraction step in `maxLik()` this can be removed from the dataframe with the argument `removeClear = TRUE`. A CSV file is written to the *parameter_files* directory which can be opened in Microsoft Excel or any program that opens text files. The dataframe is also written and saved to the R console, should you wish to conduct further analyses in R.
-
-```{r}
-createDataframe("newProject", clearHalo = 1, typeName="Temp", typical = TRUE)
-newProject.df
-```
-If you want to access this dataframe in a later R session you can do so with the function `readExistingDF("betterName")`. Any project name can be used here, not only the previous name. This file can also be loaded in standard ways (e.g., `new.df <- read.csv(file)`) though if you intend to use the functions below, you need to save it with a name that ends with ".df".
-
-<b>[OPTIONAL] Add additional factor columns</b>
-If your photograph names contain more than one factor that is important (i.e, if your files names look like: line_factor1_factor2...") you can add extra factors into the dataframe using the function `addType()`. 
-
-```{r}
-addType("newProject", typeName="rep")
-newProject.df
+head(pap_features)
 ```
 
-###Aggregate replicate pictures
-The function `aggregateData()` is used if you have done replicate disk assays on the same strain and want to calculate their average and variance. The variance function can be specified with basic R variance measures (e.g, standard deviation, `sd`), the standard error (`se`), or the coefficient of variantion (`CV`). 
+`PAPArea()` creates:
 
-For this example I am loading an existing dataset that I call `manyReps.df`. This dataset contains data for seven different lines, with twelve replicates per line, and a factor I'm interested in that has two levels. I then use `aggregateData()` to average among the 12 replicates and calculate their standard error. `aggregateData()` will save a CSV file into the *parameter_files* directory as well as a new dataframe to the console (`manyReps.ag`).
+- `pap_feature_results.csv`, containing six rows per successfully processed image; and
+- `qc/`, containing `<image>_qc.png` ROI overlays.
 
-```{r}
-manyReps.df <- read.csv(file.path(getwd(), "data", "manyReps_df.csv"))
-head(manyReps.df)
+The returned data frame contains:
+
+- identifiers: `image`, `well`, `pap_step`, `pap_index`;
+- ROI size: `roi_area`;
+- pre-CLAHE absolute features: `raw_mean`, `raw_median`, `raw_intden`;
+- post-CLAHE features: `mean_gray`, `median_gray`, `sd_gray`, `min_gray`, `max_gray`, `intden_gray`, `cv_gray`; and
+- post-CLAHE dark-pixel percentages: `dark_frac_40`, `dark_frac_60`, `dark_frac_80`.
+
+`PAPArea()` does not normalize the measurements or assign FLC concentrations. Use `PAPSingle()` or `PAPDual()` for those steps.
+
+### 3A. Single-plate PAP with `PAPSingle()`
+
+Use `PAPSingle()` for the fixed single-plate design below:
+
+| Well | `TL` | `TM` | `TR` | `BL` | `BM` | `BR` |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| FLC (µg/mL) | 0 | 8 | 12 | 16 | 24 | 32 |
+
+Image names become `sample_id` values after the extension and an optional trailing `_crop` are removed. For example, `isolate_01_crop.png` becomes `isolate_01`. No `H`/`L` suffix is required.
+
+The parsed basename is used exactly as the sample identifier. Files such as `isolate_01_rep1.png` and `isolate_01_rep2.png` therefore remain different samples unless they are renamed or combined separately.
+
+Run feature extraction and single-plate processing together:
+
+```r
+single_out <- "/path/to/single_pap_output"
+
+single_res <- PAPSingle(
+  inputDir      = "/path/to/single_plate_images",
+  projectDir    = single_out,
+  imageJLoc     = "/Applications/Fiji.app",
+  normalization = "0",
+  return_mode   = "all",
+  assign_global = FALSE
+)
+
+head(single_res$raw)
+head(single_res$avg)
 ```
 
-```{r}
-aggregateData("manyReps", replicate=c("line", "type"), varFunc="se")
-manyReps.ag
+The default `normalization = "0"` subtracts each sample's `TL` (`0` µg/mL) value. The normalized values at higher concentrations will therefore commonly be negative; their magnitude represents the change from the no-drug control.
+
+The single-plate design intentionally does **not** offer `normalization = "highest"`, because the `BR` well (`32` µg/mL) may still contain biologically meaningful growth.
+
+### 3B. Dual-plate PAP with `PAPDual()`
+
+For each sample, provide one low plate and one high plate. The image basename must end in uppercase `L` or `H` before an optional `_crop` suffix:
+
+- `104L.png` and `104H.png`; or
+- `104L_crop.png` and `104H_crop.png`.
+
+Both pairs produce `sample_id = "104"`.
+
+The part before the final plate suffix does not have to be numeric. Each sample should have one unique `L` image and one unique `H` image. A missing plate first produces a warning and may then lead to incomplete or failed overlap QC; duplicate plate images are not a supported substitute for an explicit replicate-analysis step.
+
+The fixed FLC mapping is:
+
+| Plate | `TL` | `TM` | `TR` | `BL` | `BM` | `BR` |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Low (`L`) | 0 | 0.5 | 1 | 2 | 4 | 8 |
+| High (`H`) | 0 | 8 | 16 | 32 | 64 | 128 |
+
+Run feature extraction and dual-plate processing together:
+
+```r
+dual_out <- "/path/to/dual_pap_output"
+
+dual_res <- PAPDual(
+  inputDir      = "/path/to/dual_plate_images",
+  projectDir    = dual_out,
+  imageJLoc     = "/Applications/Fiji.app",
+  normalization = "highest",
+  return_mode   = "all",
+  assign_global = FALSE
+)
+
+head(dual_res$raw)
+dual_res$overlap_qc
+head(dual_res$avg)
 ```
 
-###Calculate MIC
-The function `calcMIC` is used to convert the RAD values calculated here into the typical MIC values you would acquire with a broth microdilution assay (or an Etest strip). This conversion can be based on a) existing built-in data from a nubmer of species/drug combinations (see below), b) a user-supplied slope and intercept of the linear or quadratic relationship between RAD and log2(MIC) for the species/drug combination of interest, c) a user supplied file containing MIC information from lines previously analyzed by diskImageR for RAD, or d) a user supplied file containing both RAD and MIC information. Note that for user-supplied data (c or d) the data should not already be transformed and the file should be a .CSV file containing columns labelled "MIC" and "RAD". If the user has supplied their own MIC data the function will first determine whether a linear or quadratic model provides a better fit. A figure that plots the standard curve will be saved in the file "RAD-MIC_standardCurve.pdf" in the *figures* directory and the calculated model parameters will be saved in the file "RAD-MIC_parameters.csv" in the *parameters_out* directory.  In all cases a column containing the MIC information is added to the dataframe and the dataframe is saved. 
+The default `normalization = "highest"` subtracts the high-plate `BR` well (`128` µg/mL) separately for each sample. This mode assumes that well is a valid no-growth/agar baseline for the experiment; verify that assumption before interpreting the normalized values.
 
-Either a `diskImageR` dataframe (e.g., newProject.df) or aggregated dataframe (e.g., newProject.ag) can be used.
+`overlap_qc` compares `norm_mean` between the low and high plates at the duplicated `0` and `8` µg/mL concentrations. It reports `plate_H`, `plate_L`, `diff = plate_H - plate_L`, and `abs_diff`. Large `abs_diff` values should prompt inspection of the corresponding QC images and plate measurements.
 
+### 4. Compare normalization methods without rerunning Fiji
 
-###Plot parameter results
-Three related plotting functions are included with `diskImageR`. The function `oneParamPlot()`will plot any of the single parameters (argument `param` supports "RAD20", "RAD50", "RAD80", "FoG20", "FoG50", "FoG80", "slope", the default = "RAD20") while `twoParamPlot()` will plot RAD and FoG at specified cutoff values (`RAD` supports "RAD20", "RAD50", "RAD80"; `FoG` supports "FoG20", "FoG50", "FoG80"), and `threeParamPlot()` will plot RAD, FoG and slope. 
+After `pap_feature_results.csv` has been generated, set `run_macro = FALSE` to reuse it:
 
-The required input for all three functions can be the dataframe from either `createDataframe()` (specified by argument `type="df"`, the default) or from `aggregateData()` (specified by argument `type="ag"`).  
+```r
+dual_zero <- PAPDual(
+  projectDir    = dual_out,
+  run_macro     = FALSE,
+  normalization = "0",
+  assign_global = FALSE
+)
 
-`oneParamPlot()` will plot either a barplot (argument `barplot = TRUE`) or a dotplot (argument `barplot=FALSE`). In the two and three parameter plots the default is to plot FoG as a barplot and RAD and slope as a dotplot, though FoG can also be plotted as a dotplot with argument `barplot=FALSE`. 
-
-Many aspects of these figure can be specified depending on type of dataframe and the number of parameters. Full details are provided in the accompanying package help files in R (e.g., `?oneParamPlot`).
-
-```{r, fig.width=5, fig.height=4}
-twoParamPlot("manyReps", type= "df", popUp = TRUE, savePDF =FALSE, xlabAngle = -45)
+dual_avg_only <- PAPDual(
+  projectDir    = dual_out,
+  run_macro     = FALSE,
+  normalization = "highest",
+  return_mode   = "avg",
+  assign_global = FALSE
+)
 ```
 
-```{r, fig.width=5, fig.height=4, tidy=TRUE}
-twoParamPlot("manyReps", type= "ag", popUp = TRUE, savePDF =FALSE, xlabAngle = -45, order = c(1, 8, 2, 9, 3, 10, 4, 11, 5, 12, 6, 13, 7, 14), xlabels =paste(rep(manyReps.ag$line[1:7], each=2), rep(c("A", "B"), 7), sep="-"))
+Available normalization modes are:
+
+| Mode | `PAPSingle()` | `PAPDual()` | Reference calculation |
+| --- | :---: | :---: | --- |
+| `"0"` | default | available | Single: sample `TL`; dual: mean of the sample's `L-TL` and `H-TL` wells. |
+| `"highest"` | not available | default | The sample's `H-BR` well (`128` µg/mL). |
+| `"000blank"`, `blank_mode = "global"` | available | available | One offset per feature, calculated across all six blank wells. |
+| `"000blank"`, `blank_mode = "per_well"` | available | available | A separate offset for each spatial well position. |
+
+All modes leave `raw_mean`, `raw_median`, and `raw_intden` unchanged and add the corresponding `norm_*` columns. Post-CLAHE features are retained but are not used to calculate `norm_*`. The wrappers perform reference subtraction only; interpret the sign of a normalized grayscale difference after confirming the lighting and grayscale polarity of the imaging setup.
+
+#### In-folder blank
+
+Include an image such as `000blank.png` in the input batch and request blank normalization:
+
+```r
+single_blank <- PAPSingle(
+  projectDir    = single_out,
+  run_macro     = FALSE,
+  normalization = "000blank",
+  blank_mode    = "per_well",
+  assign_global = FALSE
+)
 ```
 
-###Walkthrough of typical diskImageR use
+The default `blank_pattern = "^000blank"` is a regular expression matched against the image basename. Matching images are used as blank references and excluded from sample results.
 
+#### External blank CSV
 
-```{r, eval=FALSE, tidy=TRUE}
-#load diskImageR
+Alternatively, provide a feature CSV containing the blank-plate rows:
+
+```r
+dual_blank <- PAPDual(
+  projectDir    = dual_out,
+  run_macro     = FALSE,
+  normalization = "000blank",
+  blank_mode    = "global",
+  blank_csv     = "/path/to/blank/pap_feature_results.csv",
+  assign_global = FALSE
+)
+```
+
+An external blank CSV takes precedence over an in-folder blank. It must contain `well`, `raw_mean`, `raw_median`, and `raw_intden`. The wrappers report the blank's six-well grayscale mean, standard deviation, and coefficient of variation; when the CV exceeds 5%, they suggest considering `blank_mode = "per_well"`.
+
+### 5. Understand and save the returned objects
+
+With `return_mode = "all"`, both wrappers return a list with a common structure:
+
+| Element | `PAPSingle()` | `PAPDual()` |
+| --- | --- | --- |
+| `raw` | Per-well measurements with `sample_id`, `plate = "S"`, FLC, and `norm_*`. | Per-well measurements with `sample_id`, `plate = "H"/"L"`, FLC, and `norm_*`. |
+| `overlap_qc` | `NULL` because the single plate has no duplicated concentrations. | H-versus-L comparison at `0` and `8` µg/mL. |
+| `avg` | Sample-by-FLC mean table. | Sample-by-FLC mean table; duplicated `0` and `8` µg/mL values are averaged across plates. |
+
+In `avg`, the current `n_plate` column is the number of input rows contributing to each sample-by-FLC group. For a complete dual-plate pair it is normally `2` at the duplicated `0` and `8` µg/mL concentrations and `1` elsewhere; it should not be interpreted as a robust distinct-plate count when duplicate inputs are present.
+
+The processed `raw`, `overlap_qc`, and `avg` objects are returned to R but are not automatically written as separate CSV files. Save them explicitly if needed:
+
+```r
+write.csv(dual_res$avg,
+          file.path(dual_out, "pap_dual_avg.csv"),
+          row.names = FALSE)
+
+write.csv(dual_res$overlap_qc,
+          file.path(dual_out, "pap_dual_overlap_qc.csv"),
+          row.names = FALSE)
+```
+
+A minimal visualization for the first sample is:
+
+```r
+one_sample <- subset(
+  single_res$avg,
+  sample_id == single_res$avg$sample_id[1]
+)
+
+plot(
+  one_sample$flc,
+  one_sample$norm_mean,
+  type = "b",
+  xlab = "FLC (µg/mL)",
+  ylab = "Normalized mean grayscale"
+)
+```
+
+If `projectName` is supplied and `assign_global = TRUE`, `PAPSingle()` or `PAPDual()` also places the full result list in the global environment under that name. Capturing the return value with `assign_global = FALSE`, as in the examples above, keeps the data flow explicit. `PAPArea()` similarly assigns its data frame globally only when `projectName` is supplied.
+
+## PAP troubleshooting and quality checks
+
+- **Existing output:** `PAPArea()` stops if `pap_feature_results.csv` or `qc/` already exists. Set `overwrite = TRUE` only when you intend to remove those previous PAP outputs and rerun the macro.
+- **Reusing output:** `run_macro = FALSE` requires a file named exactly `pap_feature_results.csv` in `projectDir`.
+- **ROI count:** the Fiji macro expects exactly six ROIs. An image is skipped if the loaded ROI zip does not contain six entries.
+- **QC overlays:** inspect every file in `qc/` before analyzing results. A shifted ROI template invalidates all features from the affected image.
+- **Image names:** dual-plate sample images without a final uppercase `H` or `L` are ignored with a warning. Blank images should match `blank_pattern`.
+- **Fiji launcher:** if automatic discovery fails, set `imageJLoc` to the Fiji/ImageJ application directory and use `debug = TRUE` to print the selected paths and process output.
+- **Fiji closes after the macro:** the bundled PAP macro calls `Quit` when the batch finishes, so the Fiji process started for the analysis will close automatically.
+- **Missing pipe or packages:** install `dplyr`, `stringr`, and `tidyr`, and run `library(dplyr)` before the PAP wrappers.
+- **Normalization choice:** inspect raw measurements and experimental controls before choosing a baseline. The available methods encode different biological assumptions and are not interchangeable by default.
+- **Current Windows `AutoCrop()` limitation:** the Windows macro can write cropped files but the R wrapper may subsequently fail while checking its completion status. Verify the output directory if this occurs.
+
+For full argument documentation, use:
+
+```r
+?AutoCrop
+?PAPArea
+?PAPSingle
+?PAPDual
+```
+
+## Original disk diffusion workflow
+
+The original workflow analyzes radial pixel-intensity profiles around diffusion disks. For typical assays it estimates resistance using RAD20/RAD50/RAD80, tolerance using FoG20/FoG50/FoG80, and sensitivity from the fitted curve. With `typical = FALSE`, the package can also classify and analyze confounding and paradoxical response patterns.
+
+### Main functions
+
+| Stage | Function | Purpose |
+| --- | --- | --- |
+| Optional preparation | `AutoCrop()` | Crop a standard or six-well plate from a dark background. |
+| ImageJ extraction | `IJMacro()` | Analyze a standard single-disk photograph. |
+| Multi-disk extraction | `IJMacro16()` | Analyze plates containing 16 diffusion disks. |
+| Reload extraction | `readInExistingIJ()` | Load an existing ImageJ analysis into R. |
+| Raw-data QC | `plotRaw()` | Plot the average radial intensity profiles. |
+| Curve fitting | `maxLik()` | Fit the response models. |
+| Optional model export | `saveMLparam()` | Save fitted maximum-likelihood parameters. |
+| Parameter table | `createDataframe()` | Calculate and save response parameters. |
+| Replicate summary | `aggregateData()` | Aggregate replicate photographs. |
+| MIC conversion | `calcMIC()` | Convert supported RAD measurements to MIC estimates. |
+| Plotting | `oneParamPlot()`, `twoParamPlot()`, `threeParamPlot()` | Plot one, two, or three response parameters. |
+
+### Minimal traditional example
+
+```r
 library(diskImageR)
 
-#Run the ImageJ component, save the output. "newProject" shhould be changed to something of your choice (and then the same name used throughout); note that the quotation marks are required.
-#To use a pop-up box interface:
-IJMacro("newProject")
-#OR To specify the appropriate directories without the pop-up interface:
-IJMacro("newProject",  "/path/to/projectDir", "/path/to/projectDir/photographs/")
+IJMacro(
+  "newProject",
+  projectDir = "/path/to/project",
+  photoDir   = "/path/to/photographs"
+)
 
-#Plot the result of ImageJ analysis (averaged among 72 lines drawn outward from the center of the diffusion disk). 
 plotRaw("newProject")
 
-#Use maximum likelihood to fit single and double logistic models to the data from each photograph. "clearHalo" is used to specify a picture that has a clear zone beside the disk; the intensity at this point is subtracted from all photographs and will be most accurate when photographs are taken with equal lighting without shadows. This can be a blank plate with just a disk on it (removed in the next step). RAD and FoG arguments specify values for plotting only, and do not influence analysis.
-maxLik("newProject", clearHalo=1, RAD="all", FoG ="50", typical = TRUE)
+maxLik(
+  "newProject",
+  clearHalo = 1,
+  RAD        = "all",
+  FoG        = 20,
+  typical    = TRUE
+)
 
-#Use the logistic models from maxLik() to calculate resistance (20%, 50% and 80% reduction in growth = RAD20, RAD50, RAD80), tolerance (fraction of growth achvied above RAD relative to potential growth = FoG20, FoG50, FoG80), and sensitivity (slope at RAD50), which are saved in a CSV file. If you used a blank plate for clearHalo, remove with argument removeClear = TRUE.
-createDataframe("newProject", clearHalo = 1, typical = TRUE)
+createDataframe(
+  "newProject",
+  clearHalo = 1,
+  typical   = TRUE
+)
 
-#[OPTIONAL] Calculate the mean and variance for parameter estimates across replicate pictures
+# Optional
+saveMLparam("newProject", typical = TRUE)
 aggregateData("newProject")
-
-#[OPTIONAL[ Calculate MIC from RAD values using built-in data for a limited number of spcies/drug combinations or user-supplied data.
 calcMIC("newProject")
-
 ```
 
-###Acknowledgements
-* Richard Fitzjohn: contributed the maximum likelihood function `find.mle()` from [diversitree] (https://github.com/richfitz/diversitree)
-* Inbal Hecht: coded portions of `calcMIC()` and contributed a patch to make `IJMacro()` more compatible with Windows
-* Sincere thanks also to Adi Ulman for the original motivation, Noa Blutraich, Gal Benron, and Alexander Rosenberg for testing many versions of the code presented here, Yoav Ram for going through the code from the entire package, and Darren Abbey and particularly Judith Berman for philosophical discussions about how best to computationally capture the biological variation observed in disk assay experiments.
+For atypical response analysis, pass `typical = FALSE` consistently to `maxLik()`, `saveMLparam()`, and `createDataframe()`.
 
-###Questions, comments, feedback? 
-Please contact Aleeza Gerstein, <gerst035@umn.edu>
+Photograph quality and consistency remain critical. Use fixed camera settings, minimize shadows, keep the plate geometry consistent, and inspect the raw-profile plots before fitting models. The standard disk workflow also expects paths without spaces or special characters.
 
-###Updated
-Last updated March 2016
+## Vignette and additional help
+
+The repository includes a [bundled HTML vignette](inst/diskImageR_vignette.html) for the original disk diffusion workflow. An upstream PDF vignette is also available [here](https://www.microstatslab.ca/uploads/2/3/5/6/23564534/diskimager_vignette_v4.pdf).
+
+The PDF vignette predates the PAP feature workflow documented above. For PAP-specific arguments and return values, use the current R help pages and source-linked documentation.
+
+## Acknowledgements
+
+- Richard FitzJohn contributed the maximum-likelihood function `find.mle()` from [diversitree](https://github.com/richfitz/diversitree).
+- Inbal Hecht coded portions of `calcMIC()` and contributed a patch that improved `IJMacro()` compatibility with Windows.
+- Sincere thanks to Adi Ulman, Noa Blutraich, Gal Benron, Alexander Rosenberg, Yoav Ram, Darren Abbey, and Judith Berman for the motivation, testing, code review, and discussions that supported the original package.
+
+## Questions, comments, and feedback
+
+For issues specific to this fork, please use the [GitHub issue tracker](https://github.com/tony27786/diskImageR/issues). For the original package and scientific workflow, see [acgerstein/diskImageR](https://github.com/acgerstein/diskImageR).
+
+## Updated
+
+README synchronized with `diskImageR` **1.1.0.9066** in July 2026.
