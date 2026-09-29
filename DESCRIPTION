@@ -15,7 +15,7 @@ Description: A customized version of the original diskImageR package for
 Depends: R (>= 3.0.3)
 SystemRequirements: ImageJ (all OS), Xcode (Mac)
 License: GPL-3
-Imports: zoo, subplex, tcltk, methods
+Imports: zoo, subplex, tcltk, methods, dplyr, stringr, tidyr
 Suggests: knitr
 Encoding: UTF-8
 NeedsCompilation: no
